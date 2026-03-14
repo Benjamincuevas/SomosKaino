@@ -17,7 +17,7 @@ export async function generateReply({
 }) {
   // gemini-1.5-flash: rápido y barato, perfecto para respuestas de WhatsApp
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash",
+    model: "gemini-2.0-flash-lite",
     // systemInstruction: equivalente al "system prompt" de OpenAI
     // Le da personalidad e instrucciones al bot
     systemInstruction: systemPrompt,
