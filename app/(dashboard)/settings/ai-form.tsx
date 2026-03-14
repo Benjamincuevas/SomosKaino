@@ -1,20 +1,27 @@
 "use client"
-// Formulario de configuración de IA — Client Component
 
 import { useState } from "react"
-import { saveAiConfig } from "./actions"
 import type { AiConfig } from "@/types"
 
 export default function AiForm({ config }: { config: AiConfig | null }) {
-  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle")
+  const [systemPrompt, setSystemPrompt] = useState(config?.system_prompt ?? "")
+  const [enabled, setEnabled]           = useState(config?.enabled ?? true)
+  const [status, setStatus]   = useState<"idle" | "loading" | "success" | "error">("idle")
   const [errorMsg, setErrorMsg] = useState("")
 
-  async function handleSubmit(formData: FormData) {
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
     setStatus("loading")
-    const result = await saveAiConfig(formData)
 
-    if (result?.error) {
-      setErrorMsg(result.error)
+    const res = await fetch("/api/settings/ai", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ system_prompt: systemPrompt, enabled }),
+    })
+
+    const data = await res.json()
+    if (data.error) {
+      setErrorMsg(data.error)
       setStatus("error")
     } else {
       setStatus("success")
@@ -28,14 +35,13 @@ export default function AiForm({ config }: { config: AiConfig | null }) {
         Define cómo responde tu asistente automático en WhatsApp
       </p>
 
-      <form action={handleSubmit} className="flex flex-col gap-4">
-        {/* Toggle para activar/desactivar la IA */}
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div className="flex items-center gap-3">
           <input
-            name="enabled"
             id="enabled"
             type="checkbox"
-            defaultChecked={config?.enabled ?? true}
+            checked={enabled}
+            onChange={(e) => setEnabled(e.target.checked)}
             className="w-4 h-4 accent-green-600"
           />
           <label htmlFor="enabled" className="text-sm font-medium text-gray-700">
@@ -46,13 +52,13 @@ export default function AiForm({ config }: { config: AiConfig | null }) {
         <div>
           <label className="text-sm font-medium text-gray-700">Prompt del sistema</label>
           <p className="text-xs text-gray-400 mb-1">
-            Instrucciones que definen la personalidad y comportamiento de tu asistente
+            Instrucciones que definen la personalidad de tu asistente
           </p>
           <textarea
-            name="system_prompt"
             rows={6}
-            defaultValue={config?.system_prompt ?? ""}
-            placeholder="Ej: Eres un asistente amigable de bienes raíces. Responde de forma breve y profesional. Cuando el lead muestre interés en una propiedad, pide su nombre y cuándo puede agendar una cita."
+            value={systemPrompt}
+            onChange={(e) => setSystemPrompt(e.target.value)}
+            placeholder="Eres un asistente amigable de bienes raíces..."
             required
             className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
           />
