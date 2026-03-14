@@ -1,9 +1,9 @@
 // Funciones de IA — genera respuestas usando Google Gemini
+// Usa el nuevo SDK @google/genai (reemplazo del deprecado @google/generative-ai)
 
-import { GoogleGenerativeAI } from "@google/generative-ai"
+import { GoogleGenAI } from "@google/genai"
 
-// Crear el cliente una sola vez (singleton)
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! })
 
 // Genera una respuesta automática para un mensaje de WhatsApp
 export async function generateReply({
@@ -15,25 +15,22 @@ export async function generateReply({
   systemPrompt: string
   conversationHistory?: { role: "user" | "assistant"; content: string }[]
 }) {
-  // gemini-1.5-flash: rápido y barato, perfecto para respuestas de WhatsApp
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash-lite",
-    // systemInstruction: equivalente al "system prompt" de OpenAI
-    // Le da personalidad e instrucciones al bot
-    systemInstruction: systemPrompt,
-  })
-
-  // Gemini usa "parts" para el historial de conversación
-  // Convertimos nuestro formato { role, content } al formato de Gemini
+  // Convertir historial al formato que espera el nuevo SDK
   const history = conversationHistory.map((msg) => ({
-    role: msg.role === "assistant" ? "model" : "user",  // Gemini usa "model" en vez de "assistant"
+    role:  msg.role === "assistant" ? "model" : "user",
     parts: [{ text: msg.content }],
   }))
 
-  // startChat mantiene el contexto de la conversación
-  const chat = model.startChat({ history })
+  // Agregar el mensaje actual al final del historial
+  history.push({ role: "user", parts: [{ text: userMessage }] })
 
-  // Enviar el mensaje actual y esperar la respuesta
-  const result = await chat.sendMessage(userMessage)
-  return result.response.text()
+  const response = await ai.models.generateContent({
+    model:    "gemini-2.0-flash-lite",
+    contents: history,
+    config: {
+      systemInstruction: systemPrompt,
+    },
+  })
+
+  return response.text ?? ""
 }
