@@ -1,11 +1,9 @@
-// Funciones de IA — genera respuestas usando Google Gemini
-// Usa el nuevo SDK @google/genai (reemplazo oficial de @google/generative-ai)
+// Funciones de IA — Google Gemini vía @google/genai SDK
 
 import { GoogleGenAI } from "@google/genai"
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! })
 
-// Genera una respuesta automática para un mensaje de WhatsApp
 export async function generateReply({
   userMessage,
   systemPrompt,
@@ -15,23 +13,18 @@ export async function generateReply({
   systemPrompt: string
   conversationHistory?: { role: "user" | "assistant"; content: string }[]
 }) {
-  // Construir el historial en el formato que espera el nuevo SDK
   const contents = [
-    // Historial previo de la conversación
     ...conversationHistory.map((msg) => ({
       role:  msg.role === "assistant" ? "model" : "user",
       parts: [{ text: msg.content }],
     })),
-    // Mensaje actual del contacto
     { role: "user", parts: [{ text: userMessage }] },
   ]
 
   const response = await ai.models.generateContent({
-    model:    "gemini-2.0-flash-lite",
+    model:    "gemini-2.5-flash",
     contents,
-    config: {
-      systemInstruction: systemPrompt,
-    },
+    config: { systemInstruction: systemPrompt },
   })
 
   return response.text ?? ""
