@@ -257,12 +257,41 @@ export async function POST(request: NextRequest) {
       ? `${aiConfig.system_prompt}\n\n## Información de propiedades disponibles:\n${propertyData}`
       : aiConfig.system_prompt
 
+    // Helper para garantizar que el cliente siempre reciba una respuesta
+    const sendFallback = async () => {
+      const fallback = "En este momento tuve un inconveniente para responder. Vuelvo enseguida. 🙏"
+      try {
+        await sendWhatsAppMessage({
+          to:            from,
+          message:       fallback,
+          phoneNumberId: whatsappConfig.phone_number_id!,
+          accessToken:   whatsappConfig.access_token!,
+        })
+        await supabase.from("messages").insert({
+          conversation_id: conversationId,
+          content:         fallback,
+          direction:       "outbound",
+          sent_by_ai:      true,
+        })
+      } catch (err) {
+        console.error("❌ Error enviando fallback:", err)
+      }
+    }
+
     // Generar respuesta con Gemini
-    const { reply, image_url } = await generateReply({
-      userMessage:         textForAI,
-      systemPrompt,
-      conversationHistory: history,
-    })
+    let reply     = ""
+    let image_url: string | null = null
+
+    try {
+      ({ reply, image_url } = await generateReply({
+        userMessage:         textForAI,
+        systemPrompt,
+        conversationHistory: history,
+      }))
+    } catch (err) {
+      console.error("❌ Error generando respuesta con IA:", err)
+      await sendFallback()
+    }
 
     // Enviar imagen si la IA incluyó una URL
     if (image_url) {
@@ -304,7 +333,7 @@ export async function POST(request: NextRequest) {
 
         console.log(`🖼️ Imagen enviada a ${from}: ${image_url}`)
 
-        // Si también hay texto (caption), enviarlo como mensaje aparte
+        // Si también hay texto, enviarlo como mensaje aparte
         if (reply) {
           const sent = await sendWhatsAppMessage({
             to:            from,
@@ -322,27 +351,55 @@ export async function POST(request: NextRequest) {
         }
       } catch (err) {
         console.error("❌ Error enviando imagen:", err)
+        // Si falló la imagen pero hay texto, enviarlo igual
+        if (reply) {
+          try {
+            const sent = await sendWhatsAppMessage({
+              to:            from,
+              message:       reply,
+              phoneNumberId: whatsappConfig.phone_number_id!,
+              accessToken:   whatsappConfig.access_token!,
+            })
+            await supabase.from("messages").insert({
+              conversation_id:     conversationId,
+              content:             reply,
+              direction:           "outbound",
+              sent_by_ai:          true,
+              whatsapp_message_id: sent?.messages?.[0]?.id ?? null,
+            })
+          } catch {
+            await sendFallback()
+          }
+        } else {
+          await sendFallback()
+        }
       }
     } else if (reply) {
       // Enviar solo texto
-      const sent = await sendWhatsAppMessage({
-        to:            from,
-        message:       reply,
-        phoneNumberId: whatsappConfig.phone_number_id!,
-        accessToken:   whatsappConfig.access_token!,
-      })
+      try {
+        const sent = await sendWhatsAppMessage({
+          to:            from,
+          message:       reply,
+          phoneNumberId: whatsappConfig.phone_number_id!,
+          accessToken:   whatsappConfig.access_token!,
+        })
 
-      await supabase.from("messages").insert({
-        conversation_id:     conversationId,
-        content:             reply,
-        direction:           "outbound",
-        sent_by_ai:          true,
-        whatsapp_message_id: sent?.messages?.[0]?.id ?? null,
-      })
+        await supabase.from("messages").insert({
+          conversation_id:     conversationId,
+          content:             reply,
+          direction:           "outbound",
+          sent_by_ai:          true,
+          whatsapp_message_id: sent?.messages?.[0]?.id ?? null,
+        })
 
-      console.log(`🤖 Respuesta IA enviada a ${from}: "${reply}"`)
+        console.log(`🤖 Respuesta IA enviada a ${from}: "${reply}"`)
+      } catch (err) {
+        console.error("❌ Error enviando texto:", err)
+        await sendFallback()
+      }
     } else {
-      console.warn(`⚠️ La IA generó una respuesta vacía para ${from}, no se envió nada`)
+      console.warn(`⚠️ La IA generó una respuesta vacía para ${from}`)
+      await sendFallback()
     }
   }
 
