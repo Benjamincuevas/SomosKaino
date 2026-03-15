@@ -26,6 +26,7 @@ export default async function ContactsPage() {
     .order("last_message_at", { ascending: false, nullsFirst: false })
 
   return (
+    <div className="flex-1 overflow-auto p-6">
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Contactos</h1>
@@ -98,6 +99,7 @@ export default async function ContactsPage() {
           })}
         </div>
       )}
+    </div>
     </div>
   )
 }

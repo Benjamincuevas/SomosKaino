@@ -36,6 +36,7 @@ export default async function SettingsPage() {
   ])
 
   return (
+    <div className="flex-1 overflow-auto p-6">
     <div className="flex flex-col gap-6 max-w-2xl">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Configuración</h1>
@@ -44,6 +45,7 @@ export default async function SettingsPage() {
 
       <WhatsappForm config={whatsappConfig} />
       <AiForm config={aiConfig} />
+    </div>
     </div>
   )
 }

@@ -56,7 +56,7 @@ export default async function ConversationPage({ params }: { params: { id: strin
     .order("created_at", { ascending: true })
 
   return (
-    <div className="flex flex-col h-full -m-6">
+    <div className="flex-1 flex flex-col min-h-0">
 
       <ConversationHeader
         conversationId={conversation.id}

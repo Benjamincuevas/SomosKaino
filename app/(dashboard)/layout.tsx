@@ -64,7 +64,7 @@ export default async function DashboardLayout({
       </aside>
 
       {/* ── CONTENIDO ── */}
-      <main className="flex-1 overflow-auto p-6">
+      <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {children}
       </main>
 
