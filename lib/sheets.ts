@@ -115,7 +115,7 @@ export async function getPropertyData(): Promise<SheetData> {
     const csv  = await res.text()
     const data = parseSheet(csv)
     cache = { ...data, fetchedAt: now }
-    console.log(`✅ Sheet actualizado — ${Object.keys(data.imageMap).length} productos con imagen`)
+    console.log(`✅ Sheet actualizado — ${Object.keys(data.imageMap).length} productos con imagen:`, Object.keys(data.imageMap))
     return data
   } catch (err) {
     console.error("❌ Error al obtener el sheet:", err)
@@ -123,23 +123,25 @@ export async function getPropertyData(): Promise<SheetData> {
   }
 }
 
+// Normaliza un nombre: minúsculas, guiones/underscores → espacios
+function normalizeName(s: string): string {
+  return s.toLowerCase().replace(/[-_]/g, " ").replace(/\s+/g, " ").trim()
+}
+
 // Busca la URL de imagen de un producto por nombre (fuzzy match)
 export function findImageUrl(productName: string, imageMap: Record<string, string>): string | null {
   if (!productName) return null
-  const key = productName.toLowerCase().trim()
+  const key = normalizeName(productName)
 
-  // Coincidencia exacta
-  if (imageMap[key]) return imageMap[key]
-
-  // Coincidencia parcial
   for (const [k, url] of Object.entries(imageMap)) {
-    if (k.includes(key) || key.includes(k)) return url
-  }
+    const nk = normalizeName(k)
 
-  // Coincidencia por palabras clave (ej: "a07" matchea "samsung galaxy a07")
-  const words = key.split(/\s+/).filter(w => w.length > 2)
-  for (const [k, url] of Object.entries(imageMap)) {
-    if (words.some(w => k.includes(w))) return url
+    // Coincidencia exacta o parcial (normalizada)
+    if (nk === key || nk.includes(key) || key.includes(nk)) return url
+
+    // Coincidencia por palabras clave individuales (ej: "a07" en "samsung galaxy a07 negro")
+    const words = key.split(/\s+/).filter(w => w.length > 1)
+    if (words.every(w => nk.includes(w))) return url
   }
 
   return null
