@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { getPropertyData } from "@/lib/sheets"
 
 // Extrae sheet_id y sheet_gid de una URL de Google Sheets
 function parseSheetUrl(url: string): { sheetId: string | null; sheetGid: string } {
@@ -29,9 +30,28 @@ export async function POST(request: NextRequest) {
   const { sheetId, sheetGid } = parseSheetUrl(sheet_url ?? "")
 
   if (!sheetId) {
-    return NextResponse.json({ error: "URL de Google Sheets inválida" }, { status: 400 })
+    return NextResponse.json({ error: "URL de Google Sheets inválida. Asegúrate de copiar la URL completa." }, { status: 400 })
   }
 
+  // ── Verificar que el Sheet es accesible y tiene datos ──
+  const sheetData = await getPropertyData(sheetId, sheetGid)
+
+  if (!sheetData.text) {
+    return NextResponse.json({
+      error: "No se pudo acceder al Sheet. Verifica que esté compartido como 'Cualquiera con el enlace puede ver'."
+    }, { status: 400 })
+  }
+
+  const productCount = Object.keys(sheetData.imageMap).length
+  const rowCount     = sheetData.text.split("\n").length - 1 // sin header
+
+  if (rowCount === 0) {
+    return NextResponse.json({
+      error: "El Sheet está vacío o no tiene el formato correcto. Asegúrate de tener columnas de nombre e imagen."
+    }, { status: 400 })
+  }
+
+  // ── Guardar en Supabase ──
   const { error } = await supabase
     .from("catalog_configs")
     .upsert({
@@ -43,7 +63,14 @@ export async function POST(request: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json({ success: true })
+  return NextResponse.json({
+    success: true,
+    summary: {
+      productos:     rowCount,
+      conFoto:       productCount,
+      sinFoto:       rowCount - productCount,
+    }
+  })
 }
 
 export async function GET() {
@@ -64,7 +91,7 @@ export async function GET() {
     .from("catalog_configs")
     .select("sheet_url, sheet_id, sheet_gid")
     .eq("tenant_id", tenant.id)
-    .single()
+    .maybeSingle()
 
   return NextResponse.json(data ?? {})
 }

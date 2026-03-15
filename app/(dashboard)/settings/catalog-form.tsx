@@ -12,6 +12,7 @@ export default function CatalogForm({ config }: { config: CatalogConfig | null }
   const [sheetUrl, setSheetUrl] = useState(config?.sheet_url ?? "")
   const [status, setStatus]     = useState<"idle" | "loading" | "success" | "error">("idle")
   const [errorMsg, setErrorMsg] = useState("")
+  const [summary, setSummary]   = useState<{ productos: number; conFoto: number; sinFoto: number } | null>(null)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -28,6 +29,7 @@ export default function CatalogForm({ config }: { config: CatalogConfig | null }
       setErrorMsg(data.error)
       setStatus("error")
     } else {
+      setSummary(data.summary)
       setStatus("success")
     }
   }
@@ -73,9 +75,10 @@ export default function CatalogForm({ config }: { config: CatalogConfig | null }
           </ul>
         </div>
 
-        {status === "success" && (
-          <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-3 py-2 rounded-lg">
-            ✅ Catálogo configurado correctamente
+        {status === "success" && summary && (
+          <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-3 py-2 rounded-lg space-y-1">
+            <p className="font-medium">✅ Catálogo verificado y guardado</p>
+            <p>{summary.productos} productos encontrados — {summary.conFoto} con foto, {summary.sinFoto} sin foto</p>
           </div>
         )}
         {status === "error" && (
