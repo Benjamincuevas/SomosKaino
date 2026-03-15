@@ -47,10 +47,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "ok" }, { status: 200 })
   }
 
-  const message       = messages[0]
-  const from          = message.from
-  const whatsappMsgId = message.id
-  const phoneNumberId = value?.metadata?.phone_number_id
+  const message          = messages[0]
+  const from             = message.from
+  const whatsappMsgId    = message.id
+  const phoneNumberId    = value?.metadata?.phone_number_id
+  const contactName: string | null = value?.contacts?.[0]?.profile?.name ?? null
 
   // Solo procesamos texto y audio
   if (message.type !== "text" && message.type !== "audio") {
@@ -112,6 +113,7 @@ export async function POST(request: NextRequest) {
         tenant_id:       tenantId,
         phone:           from,
         last_message_at: new Date().toISOString(),
+        ...(contactName ? { name: contactName } : {}),
       },
       { onConflict: "tenant_id,phone" }
     )
