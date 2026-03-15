@@ -5,45 +5,129 @@ const SHEET_ID  = "1lPNKPKn43Xoc3uRQTPkn0-2PIMQH4UXp3OOIHnPu-_k"
 const SHEET_GID = "1022367056"
 const CSV_URL   = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${SHEET_GID}`
 
-// Cache en memoria — se renueva cada 5 minutos para no pedir el sheet en cada mensaje
-let cache: { text: string; fetchedAt: number } | null = null
-const CACHE_TTL_MS = 5 * 60 * 1000
-
-// Convierte CSV a un formato de tabla legible para la IA
-function csvToText(csv: string): string {
-  const lines = csv.trim().split("\n").filter(Boolean)
-  if (lines.length === 0) return ""
-
-  return lines
-    .map((line) => {
-      // Divide por comas respetando campos entre comillas
-      const cells = line.match(/(".*?"|[^",]+|(?<=,)(?=,)|^(?=,)|(?<=,)$)/g) ?? []
-      return cells.map((c) => c.replace(/^"|"$/g, "").trim()).join(" | ")
-    })
-    .join("\n")
+export type SheetData = {
+  text:     string                    // contexto para la IA (sin URLs reales)
+  imageMap: Record<string, string>    // nombre_producto_lowercase → URL de imagen
 }
 
-export async function getPropertyData(): Promise<string> {
+// Cache en memoria — se renueva cada 5 minutos
+let cache: (SheetData & { fetchedAt: number }) | null = null
+const CACHE_TTL_MS = 5 * 60 * 1000
+
+// Parser de línea CSV que respeta campos entre comillas
+function parseCSVLine(line: string): string[] {
+  const cells: string[] = []
+  let current  = ""
+  let inQuotes = false
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') { current += '"'; i++ }
+      else { inQuotes = !inQuotes }
+    } else if (ch === ',' && !inQuotes) {
+      cells.push(current.trim())
+      current = ""
+    } else {
+      current += ch
+    }
+  }
+  cells.push(current.trim())
+  return cells
+}
+
+// Convierte URL de Google Drive (sharing link) a URL descargable directamente
+function normalizeImageUrl(url: string): string {
+  if (!url) return url
+  // https://drive.google.com/file/d/FILE_ID/view → descarga directa
+  const driveMatch = url.match(/\/file\/d\/([^/]+)/)
+  if (driveMatch) {
+    return `https://drive.google.com/uc?export=download&id=${driveMatch[1]}`
+  }
+  return url
+}
+
+function parseSheet(csv: string): SheetData {
+  const lines = csv.trim().split("\n").filter(Boolean)
+  if (lines.length === 0) return { text: "", imageMap: {} }
+
+  const headers   = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim())
+  const imageIdx  = headers.findIndex(h => h.includes("imagen") || h.includes("image") || h.includes("foto") || h.includes("url"))
+  const nameIdx   = headers.findIndex(h => h.includes("nombre") || h.includes("name") || h.includes("producto") || h.includes("modelo"))
+
+  const imageMap: Record<string, string> = {}
+  const textLines: string[] = []
+
+  // Cabecera para la IA (reemplazamos imagen_url por "imagen")
+  const displayHeaders = headers.map((h, i) =>
+    i === imageIdx ? "imagen" : h
+  )
+  textLines.push(displayHeaders.join(" | "))
+
+  for (const line of lines.slice(1)) {
+    const cells = parseCSVLine(line)
+
+    // Construir mapa de imagen
+    const productName = nameIdx >= 0 ? cells[nameIdx]?.trim() : cells[0]?.trim()
+    const rawUrl      = imageIdx >= 0 ? cells[imageIdx]?.trim() : ""
+    if (productName && rawUrl) {
+      imageMap[productName.toLowerCase()] = normalizeImageUrl(rawUrl)
+    }
+
+    // Texto para la IA: en lugar de la URL, mostrar "disponible" o ""
+    const displayCells = cells.map((c, i) => {
+      if (i === imageIdx) return rawUrl ? "disponible" : ""
+      return c.replace(/^"|"$/g, "").trim()
+    })
+    textLines.push(displayCells.join(" | "))
+  }
+
+  return { text: textLines.join("\n"), imageMap }
+}
+
+export async function getPropertyData(): Promise<SheetData> {
   const now = Date.now()
 
   if (cache && now - cache.fetchedAt < CACHE_TTL_MS) {
-    return cache.text
+    return { text: cache.text, imageMap: cache.imageMap }
   }
 
   try {
     const res = await fetch(CSV_URL, { next: { revalidate: 0 } })
     if (!res.ok) {
       console.error(`❌ No se pudo obtener el sheet: ${res.status}`)
-      return cache?.text ?? ""
+      return cache ? { text: cache.text, imageMap: cache.imageMap } : { text: "", imageMap: {} }
     }
 
     const csv  = await res.text()
-    const text = csvToText(csv)
-    cache = { text, fetchedAt: now }
-    console.log("✅ Sheet de propiedades actualizado")
-    return text
+    const data = parseSheet(csv)
+    cache = { ...data, fetchedAt: now }
+    console.log(`✅ Sheet actualizado — ${Object.keys(data.imageMap).length} productos con imagen`)
+    return data
   } catch (err) {
     console.error("❌ Error al obtener el sheet:", err)
-    return cache?.text ?? ""
+    return cache ? { text: cache.text, imageMap: cache.imageMap } : { text: "", imageMap: {} }
   }
+}
+
+// Busca la URL de imagen de un producto por nombre (fuzzy match)
+export function findImageUrl(productName: string, imageMap: Record<string, string>): string | null {
+  if (!productName) return null
+  const key = productName.toLowerCase().trim()
+
+  // Coincidencia exacta
+  if (imageMap[key]) return imageMap[key]
+
+  // Coincidencia parcial
+  for (const [k, url] of Object.entries(imageMap)) {
+    if (k.includes(key) || key.includes(k)) return url
+  }
+
+  // Coincidencia por palabras clave (ej: "a07" matchea "samsung galaxy a07")
+  const words = key.split(/\s+/).filter(w => w.length > 2)
+  for (const [k, url] of Object.entries(imageMap)) {
+    if (words.some(w => k.includes(w))) return url
+  }
+
+  return null
 }

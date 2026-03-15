@@ -42,14 +42,21 @@ export async function describeImage(buffer: Buffer, mimeType: string): Promise<s
 
 const JSON_FORMAT_INSTRUCTION = `
 
-IMPORTANTE — FORMATO DE RESPUESTA OBLIGATORIO:
-Responde SIEMPRE con un objeto JSON en una sola línea, sin markdown, sin bloques de código, sin texto fuera del JSON:
-{"reply": "tu mensaje aquí", "image_url": null}
+FORMATO DE RESPUESTA OBLIGATORIO — responde SIEMPRE con este JSON en una sola línea, sin markdown ni texto fuera:
+{"reply":"mensaje al cliente","product_name":null,"purchase_detected":false,"client_summary":""}
 
-Reglas para image_url:
-- Si el usuario pide ver una foto/imagen de un producto Y los datos contienen una columna imagen_url con un valor para ese producto, copia ese valor EXACTAMENTE en image_url.
-- En cualquier otro caso, pon null.
-- NUNCA inventes rutas, nombres de archivo ni herramientas. Solo copia la URL tal como aparece en los datos.`
+Reglas:
+- reply: tu mensaje al cliente.
+- product_name: si el cliente pide ver la foto de un producto, escribe el nombre exacto del modelo como aparece en los datos (ej: "Samsung Galaxy A07"). Pon null si no aplica. NO pongas URLs ni rutas de archivo.
+- purchase_detected: pon true si el cliente dice que ya pagó, envió transferencia, o manda un comprobante de pago.
+- client_summary: si purchase_detected es true, escribe un resumen breve: producto comprado, monto, nombre del cliente. Si no aplica, deja "".`
+
+export type AIReply = {
+  reply:             string
+  productName:       string | null
+  purchaseDetected:  boolean
+  clientSummary:     string
+}
 
 export async function generateReply({
   userMessage,
@@ -59,7 +66,7 @@ export async function generateReply({
   userMessage: string
   systemPrompt: string
   conversationHistory?: { role: "user" | "assistant"; content: string }[]
-}): Promise<{ reply: string; image_url: string | null }> {
+}): Promise<AIReply> {
   const contents = [
     ...conversationHistory.map((msg) => ({
       role:  msg.role === "assistant" ? "model" : "user",
@@ -79,19 +86,20 @@ export async function generateReply({
 
   if (!raw) {
     console.warn("⚠️ Gemini devolvió respuesta vacía")
-    return { reply: "", image_url: null }
+    return { reply: "", productName: null, purchaseDetected: false, clientSummary: "" }
   }
 
-  // Intentar parsear JSON — si falla, usar el texto tal cual sin imagen
   try {
     const cleaned = raw.replace(/^```json\s*/i, "").replace(/\s*```$/, "")
-    const parsed = JSON.parse(cleaned)
+    const parsed  = JSON.parse(cleaned)
     return {
-      reply:     (parsed.reply ?? "").trim(),
-      image_url: parsed.image_url && parsed.image_url !== "null" ? parsed.image_url : null,
+      reply:            (parsed.reply ?? "").trim(),
+      productName:      parsed.product_name && parsed.product_name !== "null" ? parsed.product_name : null,
+      purchaseDetected: parsed.purchase_detected === true,
+      clientSummary:    parsed.client_summary ?? "",
     }
   } catch {
     console.warn("⚠️ Gemini no devolvió JSON válido, usando texto plano")
-    return { reply: raw, image_url: null }
+    return { reply: raw, productName: null, purchaseDetected: false, clientSummary: "" }
   }
 }
