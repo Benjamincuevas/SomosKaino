@@ -115,6 +115,7 @@ export async function getPropertyData(): Promise<SheetData> {
     }
 
     const csv  = await res.text()
+    console.log(`📄 CSV recibido (primeros 300 chars):`, csv.substring(0, 300))
     const data = parseSheet(csv)
     cache = { ...data, fetchedAt: now }
     console.log(`✅ Sheet actualizado — ${Object.keys(data.imageMap).length} productos con imagen:`, Object.keys(data.imageMap))
