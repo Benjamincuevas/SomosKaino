@@ -67,6 +67,8 @@ function parseSheet(csv: string): SheetData {
   const headers   = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim())
   const imageIdx  = headers.findIndex(h => h.includes("imagen") || h.includes("image") || h.includes("foto") || h.includes("url"))
   const nameIdx   = headers.findIndex(h => h.includes("nombre") || h.includes("name") || h.includes("producto") || h.includes("modelo"))
+  console.log(`📋 Sheet headers (${headers.length}):`, headers)
+  console.log(`📋 nameIdx=${nameIdx}, imageIdx=${imageIdx}`)
 
   const imageMap: Record<string, string> = {}
   const textLines: string[] = []
