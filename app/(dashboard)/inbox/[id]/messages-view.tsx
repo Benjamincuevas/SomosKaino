@@ -12,27 +12,34 @@ type Message = {
 }
 
 type Props = {
-  messages: Message[]
+  messages: Message[]      // mensajes del servidor (actualizados con router.refresh)
   avatarColor: string
   contactInitial: string
   conversationId: string
 }
 
-export default function MessagesView({ messages: initial, avatarColor, contactInitial, conversationId }: Props) {
-  const [messages, setMessages] = useState<Message[]>(initial)
+export default function MessagesView({ messages: serverMessages, avatarColor, contactInitial, conversationId }: Props) {
+  // Mensajes recibidos SOLO via realtime (no están en serverMessages aún)
+  const [realtimeExtras, setRealtimeExtras] = useState<Message[]>([])
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  // Scroll to bottom on first load
+  // Combinar: mensajes del servidor + realtime que aún no están en el servidor
+  const messages = [
+    ...serverMessages,
+    ...realtimeExtras.filter(m => !serverMessages.some(s => s.id === m.id)),
+  ]
+
+  // Scroll al fondo en la primera carga
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "instant" })
   }, [])
 
-  // Scroll to bottom when new messages arrive
+  // Scroll al fondo cuando llegan mensajes nuevos
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages.length])
 
-  // Subscribe to new messages via Supabase Realtime
+  // Suscripción a Supabase Realtime para mensajes nuevos (inbound desde WhatsApp)
   useEffect(() => {
     const supabase = createClient()
 
@@ -48,8 +55,7 @@ export default function MessagesView({ messages: initial, avatarColor, contactIn
         },
         (payload) => {
           const newMsg = payload.new as Message
-          setMessages((prev) => {
-            // Avoid duplicates
+          setRealtimeExtras((prev) => {
             if (prev.some((m) => m.id === newMsg.id)) return prev
             return [...prev, newMsg]
           })
@@ -84,7 +90,7 @@ export default function MessagesView({ messages: initial, avatarColor, contactIn
         yesterday.setDate(today.getDate() - 1)
 
         let dateLabel = ""
-        if (date.toDateString() === today.toDateString())     dateLabel = "Hoy"
+        if (date.toDateString() === today.toDateString())          dateLabel = "Hoy"
         else if (date.toDateString() === yesterday.toDateString()) dateLabel = "Ayer"
         else dateLabel = date.toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" })
 
@@ -103,7 +109,6 @@ export default function MessagesView({ messages: initial, avatarColor, contactIn
 
             <div className={`flex items-end gap-2 mb-2 ${isInbound ? "justify-start" : "justify-end"}`}>
 
-              {/* Avatar del contacto (solo en mensajes entrantes) */}
               {isInbound && (
                 <div
                   className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mb-1"
