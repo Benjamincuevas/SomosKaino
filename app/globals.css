@@ -3,8 +3,23 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Variables CSS globales - aquí definiremos colores del tema */
 :root {
   --background: #ffffff;
   --foreground: #0f172a;
 }
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #030712;
+    --foreground: #f8fafc;
+  }
+}
+
+/* Scroll suave en todo el sitio */
+* { scroll-behavior: smooth; }
+
+/* Scrollbar elegante */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 99px; }
+.dark ::-webkit-scrollbar-thumb { background: #374151; }
