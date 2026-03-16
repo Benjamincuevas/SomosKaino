@@ -25,6 +25,7 @@ export default async function KnowledgePage() {
     { data: catalogConfig },
     { data: documents },
     { data: whatsappConfig },
+    { data: rentiaProducts },
   ] = await Promise.all([
     supabase
       .from("catalog_configs")
@@ -41,13 +42,18 @@ export default async function KnowledgePage() {
       .select("catalog_id, access_token, is_configured")
       .eq("tenant_id", tenant.id)
       .single(),
+    supabase
+      .from("catalog_products")
+      .select("id, enabled")
+      .eq("tenant_id", tenant.id),
   ])
 
   // Contar fuentes activas para el resumen
   const sheetsActive    = !!(catalogConfig?.sheet_id && catalogConfig?.enabled !== false)
   const catalogActive   = !!(whatsappConfig?.catalog_id)
   const docsActive      = (documents ?? []).filter(d => d.enabled).length
-  const totalSources    = [sheetsActive, catalogActive, docsActive > 0].filter(Boolean).length
+  const rentiaActive    = (rentiaProducts ?? []).filter(p => p.enabled).length
+  const totalSources    = [sheetsActive, catalogActive, docsActive > 0, rentiaActive > 0].filter(Boolean).length
 
   return (
     <div className="flex-1 overflow-auto p-6">
@@ -62,7 +68,14 @@ export default async function KnowledgePage() {
         </div>
 
         {/* Resumen de fuentes activas */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-4 gap-3">
+          <div className={`border rounded-xl p-4 text-center ${rentiaActive > 0 ? "bg-green-50 border-green-200" : "bg-gray-50"}`}>
+            <p className="text-2xl mb-1">📦</p>
+            <p className="text-xs font-medium text-gray-700">Catálogo RentIA</p>
+            <p className={`text-xs mt-0.5 ${rentiaActive > 0 ? "text-green-600 font-medium" : "text-gray-400"}`}>
+              {rentiaActive > 0 ? `${rentiaActive} producto${rentiaActive > 1 ? "s" : ""}` : "Inactivo"}
+            </p>
+          </div>
           <div className={`border rounded-xl p-4 text-center ${catalogActive ? "bg-green-50 border-green-200" : "bg-gray-50"}`}>
             <p className="text-2xl mb-1">🛍️</p>
             <p className="text-xs font-medium text-gray-700">Catálogo WA</p>
@@ -92,7 +105,26 @@ export default async function KnowledgePage() {
           </div>
         )}
 
-        {/* Fuentes */}
+        {/* Enlace rápido al catálogo RentIA */}
+        <a
+          href="/catalog"
+          className="flex items-center justify-between border rounded-xl p-4 hover:bg-gray-50 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center text-lg">📦</div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Catálogo RentIA</p>
+              <p className="text-xs text-gray-500">
+                {rentiaActive > 0
+                  ? `${rentiaActive} producto${rentiaActive > 1 ? "s" : ""} activo${rentiaActive > 1 ? "s" : ""}`
+                  : "Gestiona tus productos con fotos y precios"}
+              </p>
+            </div>
+          </div>
+          <span className="text-gray-400 text-sm">Gestionar →</span>
+        </a>
+
+        {/* Fuentes externas */}
         <WhatsappCatalogSource
           catalogId={whatsappConfig?.catalog_id ?? null}
           isConfigured={!!(whatsappConfig?.access_token)}

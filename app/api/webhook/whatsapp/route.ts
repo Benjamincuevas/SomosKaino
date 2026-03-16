@@ -314,7 +314,31 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 3. Documentos de conocimiento (solo los habilitados)
+  // 3. Catálogo nativo RentIA (productos con foto, precio y descripción)
+  const { data: rentiaProducts } = await supabase
+    .from("catalog_products")
+    .select("name, description, price, currency, image_url")
+    .eq("tenant_id", tenantId)
+    .eq("enabled", true)
+
+  let rentiaCatalogText = ""
+  if (rentiaProducts && rentiaProducts.length > 0) {
+    const lines = rentiaProducts.map(p => {
+      const price = p.price != null ? ` — ${p.currency} ${p.price}` : ""
+      const desc  = p.description ? ` — ${p.description}` : ""
+      const foto  = p.image_url ? " [tiene foto disponible]" : ""
+      return `• ${p.name}${desc}${price}${foto}`
+    })
+    rentiaCatalogText = lines.join("\n")
+  }
+
+  // Mapa de imágenes del catálogo RentIA para envío automático
+  const rentiaCatalogImageMap: Record<string, string> = {}
+  for (const p of rentiaProducts ?? []) {
+    if (p.image_url) rentiaCatalogImageMap[p.name.toLowerCase()] = p.image_url
+  }
+
+  // 4. Documentos de conocimiento (solo los habilitados)
   const { data: knowledgeDocs } = await supabase
     .from("knowledge_documents")
     .select("name, content")
@@ -327,9 +351,10 @@ export async function POST(request: NextRequest) {
 
   // Construir contexto de conocimiento combinado
   const knowledgeParts: string[] = []
-  if (waCatalogText)  knowledgeParts.push(`## Catálogo de productos (WhatsApp):\n${waCatalogText}`)
-  if (sheetData.text) knowledgeParts.push(`## Inventario (Google Sheets):\n${sheetData.text}`)
-  if (docsText)       knowledgeParts.push(docsText)
+  if (rentiaCatalogText) knowledgeParts.push(`## Catálogo RentIA:\n${rentiaCatalogText}`)
+  if (waCatalogText)     knowledgeParts.push(`## Catálogo WhatsApp Business:\n${waCatalogText}`)
+  if (sheetData.text)    knowledgeParts.push(`## Inventario (Google Sheets):\n${sheetData.text}`)
+  if (docsText)          knowledgeParts.push(docsText)
 
   const knowledgeContext = knowledgeParts.join("\n\n")
 
@@ -375,8 +400,11 @@ export async function POST(request: NextRequest) {
   const { reply, productName } = aiReply
 
   // ── Enviar imagen del producto si el AI lo indicó ──
+  // Busca en: 1) Catálogo RentIA  2) Google Sheets
   if (productName) {
-    const imageUrl = findImageUrl(productName, sheetData.imageMap)
+    const imageUrl =
+      findImageUrl(productName, rentiaCatalogImageMap) ??
+      findImageUrl(productName, sheetData.imageMap)
     if (imageUrl) {
       try {
         await sendImageFromUrl(imageUrl, from)

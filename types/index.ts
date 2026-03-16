@@ -80,6 +80,20 @@ export type MessageWithConversation = Message & {
   }
 }
 
+// ── PRODUCTO DEL CATÁLOGO NATIVO ──
+export type CatalogProduct = {
+  id:          string
+  tenant_id:   string
+  name:        string
+  description: string | null
+  price:       number | null
+  currency:    string
+  image_url:   string | null
+  enabled:     boolean
+  created_at:  string
+  updated_at:  string
+}
+
 // ── DOCUMENTO DE CONOCIMIENTO ──
 // Texto libre que el agente usa como fuente de conocimiento (FAQ, precios, políticas, etc.)
 export type KnowledgeDocument = {
