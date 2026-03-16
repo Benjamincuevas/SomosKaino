@@ -68,6 +68,12 @@ export default async function DashboardPage() {
   const aiTrend     = trend(aiReplies ?? 0, aiPrev ?? 0)
   const isSetupDone = waConfig?.is_configured && aiConfig?.enabled
 
+  // Sparklines: [semana anterior, semana actual] como tendencia visual
+  const convsSparkline  = [convsPrevWeek ?? 0, convsWeek ?? 0]
+  const leadsSparkline  = [leadsPrevWeek ?? 0, leadsWeek ?? 0]
+  const aiSparkline     = [aiPrev ?? 0, aiReplies ?? 0]
+  const ordersSparkline = [0, pendingOrders ?? 0]
+
   return (
     <div className="p-6 flex flex-col gap-6 max-w-7xl">
 
@@ -96,6 +102,7 @@ export default async function DashboardPage() {
           value={convsToday ?? 0}
           sublabel="Hoy"
           trend={{ value: convsTrend, label: "vs semana anterior" }}
+          sparkline={convsSparkline}
           icon={MessageCircle}
           color="blue"
           href="/inbox"
@@ -105,6 +112,7 @@ export default async function DashboardPage() {
           value={leadsToday ?? 0}
           sublabel="Hoy"
           trend={{ value: leadsTrend, label: "vs semana anterior" }}
+          sparkline={leadsSparkline}
           icon={Users}
           color="emerald"
           href="/contacts"
@@ -114,6 +122,7 @@ export default async function DashboardPage() {
           value={aiReplies ?? 0}
           sublabel="Esta semana"
           trend={{ value: aiTrend, label: "vs semana anterior" }}
+          sparkline={aiSparkline}
           icon={Bot}
           color="purple"
         />
@@ -121,6 +130,7 @@ export default async function DashboardPage() {
           label="Pedidos pendientes"
           value={pendingOrders ?? 0}
           sublabel="Sin gestionar"
+          sparkline={ordersSparkline}
           icon={ShoppingCart}
           color="amber"
           href="/orders"
