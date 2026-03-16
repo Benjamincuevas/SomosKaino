@@ -5,14 +5,17 @@ import type { CatalogProduct } from "@/types"
 import ProductForm from "./product-form"
 
 type Props = {
-  products: CatalogProduct[]
+  products:    CatalogProduct[]
+  waConnected: boolean
 }
 
-export default function CatalogGrid({ products: initial }: Props) {
+export default function CatalogGrid({ products: initial, waConnected }: Props) {
   const [products, setProducts]   = useState<CatalogProduct[]>(initial)
   const [showForm, setShowForm]   = useState(false)
   const [editing, setEditing]     = useState<CatalogProduct | null>(null)
   const [search, setSearch]       = useState("")
+  const [syncing, setSyncing]     = useState(false)
+  const [syncMsg, setSyncMsg]     = useState("")
 
   const filtered = products.filter(p =>
     p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -47,7 +50,7 @@ export default function CatalogGrid({ products: initial }: Props) {
     })
     const data = await res.json()
     if (!data.error) {
-      setProducts(prev => prev.map(p => p.id === product.id ? data : p))
+      setProducts(prev => prev.map(p => p.id === product.id ? { ...data, _wa: undefined } : p))
     }
   }
 
@@ -58,6 +61,21 @@ export default function CatalogGrid({ products: initial }: Props) {
     if (res.ok) {
       setProducts(prev => prev.filter(p => p.id !== product.id))
     }
+  }
+
+  async function syncAll() {
+    setSyncing(true)
+    setSyncMsg("")
+    const res  = await fetch("/api/catalog/sync-to-whatsapp", { method: "POST" })
+    const data = await res.json()
+
+    if (data.error) {
+      setSyncMsg(`Error: ${data.error}`)
+    } else {
+      setSyncMsg(`✅ ${data.synced} producto${data.synced !== 1 ? "s" : ""} sincronizado${data.synced !== 1 ? "s" : ""} con WhatsApp`)
+    }
+    setSyncing(false)
+    setTimeout(() => setSyncMsg(""), 5000)
   }
 
   const activeCount = products.filter(p => p.enabled).length
@@ -74,21 +92,35 @@ export default function CatalogGrid({ products: initial }: Props) {
           placeholder="Buscar producto..."
           className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
         />
+        {waConnected && products.length > 0 && (
+          <button
+            onClick={syncAll}
+            disabled={syncing}
+            className="flex items-center gap-1.5 border border-green-300 text-green-700 text-sm px-3 py-2 rounded-lg hover:bg-green-50 disabled:opacity-50 whitespace-nowrap"
+          >
+            {syncing ? "Sincronizando..." : "↑ Sincronizar WA"}
+          </button>
+        )}
         <button
           onClick={openCreate}
           className="flex items-center gap-2 bg-green-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-green-700 whitespace-nowrap"
         >
-          <span className="text-base">+</span> Nuevo producto
+          + Nuevo producto
         </button>
       </div>
 
-      {/* Stats */}
-      {products.length > 0 && (
-        <p className="text-xs text-gray-500">
-          {products.length} producto{products.length !== 1 ? "s" : ""} —{" "}
-          <span className="text-green-600 font-medium">{activeCount} activo{activeCount !== 1 ? "s" : ""}</span>
-        </p>
-      )}
+      {/* Stats + sync message */}
+      <div className="flex items-center justify-between min-h-[20px]">
+        {products.length > 0 && (
+          <p className="text-xs text-gray-500">
+            {products.length} producto{products.length !== 1 ? "s" : ""} —{" "}
+            <span className="text-green-600 font-medium">{activeCount} activo{activeCount !== 1 ? "s" : ""}</span>
+          </p>
+        )}
+        {syncMsg && (
+          <p className="text-xs text-green-700 font-medium">{syncMsg}</p>
+        )}
+      </div>
 
       {/* Form inline */}
       {showForm && (
@@ -123,17 +155,29 @@ export default function CatalogGrid({ products: initial }: Props) {
                     📦
                   </div>
                 )}
-                {/* Toggle en esquina */}
+
+                {/* Toggle */}
                 <button
                   onClick={() => toggleEnabled(product)}
+                  title={product.enabled ? "Activo — clic para pausar" : "Pausado — clic para activar"}
                   className={`absolute top-2 right-2 h-5 w-9 rounded-full transition-colors shadow ${
                     product.enabled ? "bg-green-500" : "bg-gray-400"
                   }`}
                 >
-                  <span className={`block h-3.5 w-3.5 rounded-full bg-white shadow mx-auto transition-transform ${
-                    product.enabled ? "translate-x-2" : "-translate-x-1"
+                  <span className={`block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${
+                    product.enabled ? "translate-x-[18px]" : "translate-x-[3px]"
                   }`} />
                 </button>
+
+                {/* Badge de WhatsApp */}
+                {waConnected && product.enabled && (
+                  <span
+                    title="Publicado en WhatsApp Business"
+                    className="absolute top-2 left-2 bg-white rounded-full w-6 h-6 flex items-center justify-center text-sm shadow"
+                  >
+                    💬
+                  </span>
+                )}
               </div>
 
               {/* Info */}
@@ -148,7 +192,6 @@ export default function CatalogGrid({ products: initial }: Props) {
                   </p>
                 )}
 
-                {/* Acciones */}
                 <div className="flex gap-1 mt-2">
                   <button
                     onClick={() => openEdit(product)}

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createServiceClient } from "@supabase/supabase-js"
+import { syncProductToMeta } from "@/lib/whatsapp-catalog"
 
 export async function PATCH(
   request: NextRequest,
@@ -35,7 +36,40 @@ export async function PATCH(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json(data)
+  // ── Sincronizar con WhatsApp Business ──
+  const { data: waConfig } = await supabase
+    .from("whatsapp_configs")
+    .select("catalog_id, access_token")
+    .eq("tenant_id", tenant.id)
+    .single()
+
+  let waSynced = false
+  let waSyncError: string | undefined
+
+  if (waConfig?.catalog_id && waConfig?.access_token && data.enabled) {
+    // Si se deshabilitó el producto, eliminarlo del catálogo WA
+    const method = body.enabled === false ? "DELETE" : "UPDATE"
+    const sync = await syncProductToMeta({
+      catalogId:   waConfig.catalog_id,
+      accessToken: waConfig.access_token,
+      product:     data,
+      method,
+    })
+    waSynced    = sync.success
+    waSyncError = sync.error
+  } else if (waConfig?.catalog_id && waConfig?.access_token && body.enabled === false) {
+    // Producto deshabilitado → borrar de WA
+    const sync = await syncProductToMeta({
+      catalogId:   waConfig.catalog_id,
+      accessToken: waConfig.access_token,
+      product:     data,
+      method:      "DELETE",
+    })
+    waSynced    = sync.success
+    waSyncError = sync.error
+  }
+
+  return NextResponse.json({ ...data, _wa: { synced: waSynced, error: waSyncError } })
 }
 
 export async function DELETE(
@@ -51,10 +85,9 @@ export async function DELETE(
     .from("tenants").select("id").eq("owner_id", user.id).single()
   if (!tenant) return NextResponse.json({ error: "Tenant no encontrado" }, { status: 404 })
 
-  // Obtener la imagen para eliminarla del storage también
   const { data: product } = await supabase
     .from("catalog_products")
-    .select("image_url")
+    .select("*")
     .eq("id", params.id)
     .eq("tenant_id", tenant.id)
     .single()
@@ -67,21 +100,35 @@ export async function DELETE(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Eliminar imagen del storage si existe
+  // ── Eliminar imagen del storage ──
   if (product?.image_url) {
     try {
-      const serviceClient = createServiceClient(
+      const service = createServiceClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_ROLE_KEY!
       )
       const path = product.image_url.split("/catalog-images/")[1]
-      if (path) {
-        await serviceClient.storage.from("catalog-images").remove([path])
-      }
-    } catch {
-      // No crítico si falla la limpieza del storage
-    }
+      if (path) await service.storage.from("catalog-images").remove([path])
+    } catch { /* no crítico */ }
   }
 
-  return NextResponse.json({ success: true })
+  // ── Eliminar del catálogo de WhatsApp Business ──
+  const { data: waConfig } = await supabase
+    .from("whatsapp_configs")
+    .select("catalog_id, access_token")
+    .eq("tenant_id", tenant.id)
+    .single()
+
+  let waSynced = false
+  if (waConfig?.catalog_id && waConfig?.access_token && product) {
+    const sync = await syncProductToMeta({
+      catalogId:   waConfig.catalog_id,
+      accessToken: waConfig.access_token,
+      product,
+      method:      "DELETE",
+    })
+    waSynced = sync.success
+  }
+
+  return NextResponse.json({ success: true, _wa: { synced: waSynced } })
 }

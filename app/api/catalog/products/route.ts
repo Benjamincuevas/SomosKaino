@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { syncProductToMeta } from "@/lib/whatsapp-catalog"
 
 export async function GET() {
   const supabase = createClient()
@@ -52,5 +53,26 @@ export async function POST(request: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json(data)
+  // ── Sincronizar automáticamente con WhatsApp Business Catalog ──
+  const { data: waConfig } = await supabase
+    .from("whatsapp_configs")
+    .select("catalog_id, access_token")
+    .eq("tenant_id", tenant.id)
+    .single()
+
+  let waSynced = false
+  let waSyncError: string | undefined
+
+  if (waConfig?.catalog_id && waConfig?.access_token) {
+    const sync = await syncProductToMeta({
+      catalogId:   waConfig.catalog_id,
+      accessToken: waConfig.access_token,
+      product:     data,
+      method:      "CREATE",
+    })
+    waSynced    = sync.success
+    waSyncError = sync.error
+  }
+
+  return NextResponse.json({ ...data, _wa: { synced: waSynced, error: waSyncError } })
 }
