@@ -1,44 +1,75 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import type { KnowledgeDocument } from "@/types"
 
 type Props = {
   documents: KnowledgeDocument[]
 }
 
+// Tipos de archivo que podemos leer como texto plano
+const ACCEPTED = ".txt,.md,.csv,.json"
+
 export default function DocumentsSource({ documents: initial }: Props) {
-  const [docs, setDocs]         = useState<KnowledgeDocument[]>(initial)
-  const [showForm, setShowForm] = useState(false)
-  const [editing, setEditing]   = useState<KnowledgeDocument | null>(null)
-  const [name, setName]         = useState("")
-  const [content, setContent]   = useState("")
-  const [saving, setSaving]     = useState(false)
-  const [errorMsg, setErrorMsg] = useState("")
+  const [docs, setDocs]           = useState<KnowledgeDocument[]>(initial)
+  const [showForm, setShowForm]   = useState(false)
+  const [editing, setEditing]     = useState<KnowledgeDocument | null>(null)
+  const [name, setName]           = useState("")
+  const [content, setContent]     = useState("")
+  const [saving, setSaving]       = useState(false)
+  const [errorMsg, setErrorMsg]   = useState("")
+  const [loadingFile, setLoading] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const activeCount = docs.filter(d => d.enabled).length
 
   function openCreate() {
-    setEditing(null)
-    setName("")
-    setContent("")
-    setErrorMsg("")
+    setEditing(null); setName(""); setContent(""); setErrorMsg("")
     setShowForm(true)
   }
 
   function openEdit(doc: KnowledgeDocument) {
-    setEditing(doc)
-    setName(doc.name)
-    setContent(doc.content)
-    setErrorMsg("")
+    setEditing(doc); setName(doc.name); setContent(doc.content); setErrorMsg("")
     setShowForm(true)
   }
 
   function cancelForm() {
-    setShowForm(false)
-    setEditing(null)
-    setName("")
-    setContent("")
+    setShowForm(false); setEditing(null); setName(""); setContent("")
+  }
+
+  // Leer un archivo de texto en el navegador (sin servidor)
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validar tamaño (máx 1MB para texto)
+    if (file.size > 1024 * 1024) {
+      setErrorMsg("El archivo no debe superar 1MB")
+      return
+    }
+
+    setLoading(true)
+    setErrorMsg("")
+
+    try {
+      const text = await file.text()
+      if (!text.trim()) {
+        setErrorMsg("El archivo está vacío")
+        setLoading(false)
+        return
+      }
+      // Usar el nombre del archivo como nombre del documento (sin extensión)
+      const docName = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ")
+      setName(prev => prev || docName)
+      setContent(text)
+      setShowForm(true)
+    } catch {
+      setErrorMsg("No se pudo leer el archivo")
+    }
+
+    setLoading(false)
+    // Limpiar el input para permitir subir el mismo archivo de nuevo
+    if (fileRef.current) fileRef.current.value = ""
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -46,60 +77,42 @@ export default function DocumentsSource({ documents: initial }: Props) {
     setSaving(true)
     setErrorMsg("")
 
-    if (editing) {
-      // UPDATE
-      const res  = await fetch(`/api/knowledge/documents/${editing.id}`, {
-        method:  "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ name, content }),
-      })
-      const data = await res.json()
+    const url    = editing ? `/api/knowledge/documents/${editing.id}` : "/api/knowledge/documents"
+    const method = editing ? "PATCH" : "POST"
 
-      if (data.error) {
-        setErrorMsg(data.error)
-      } else {
-        setDocs(prev => prev.map(d => d.id === editing.id ? data : d))
-        cancelForm()
-      }
+    const res  = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ name, content }),
+    })
+    const data = await res.json()
+
+    if (data.error) {
+      setErrorMsg(data.error)
     } else {
-      // CREATE
-      const res  = await fetch("/api/knowledge/documents", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ name, content }),
-      })
-      const data = await res.json()
-
-      if (data.error) {
-        setErrorMsg(data.error)
-      } else {
-        setDocs(prev => [...prev, data])
-        cancelForm()
-      }
+      setDocs(prev =>
+        editing
+          ? prev.map(d => d.id === editing.id ? data : d)
+          : [...prev, data]
+      )
+      cancelForm()
     }
-
     setSaving(false)
   }
 
   async function toggleEnabled(doc: KnowledgeDocument) {
     const res  = await fetch(`/api/knowledge/documents/${doc.id}`, {
-      method:  "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ enabled: !doc.enabled }),
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: !doc.enabled }),
     })
     const data = await res.json()
-    if (!data.error) {
-      setDocs(prev => prev.map(d => d.id === doc.id ? data : d))
-    }
+    if (!data.error) setDocs(prev => prev.map(d => d.id === doc.id ? data : d))
   }
 
   async function handleDelete(id: string) {
     if (!confirm("¿Eliminar este documento? No se puede deshacer.")) return
-
     const res = await fetch(`/api/knowledge/documents/${id}`, { method: "DELETE" })
-    if (res.ok) {
-      setDocs(prev => prev.filter(d => d.id !== id))
-    }
+    if (res.ok) setDocs(prev => prev.filter(d => d.id !== id))
   }
 
   return (
@@ -107,15 +120,12 @@ export default function DocumentsSource({ documents: initial }: Props) {
       {/* Header */}
       <div className="flex items-start justify-between p-5 border-b">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center text-lg">
-            📄
-          </div>
+          <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center text-lg">📄</div>
           <div>
-            <h2 className="text-base font-semibold text-gray-900">Documentos de Conocimiento</h2>
-            <p className="text-xs text-gray-500">FAQ, precios, políticas, información personalizada</p>
+            <h2 className="text-base font-semibold text-gray-900">Documentos</h2>
+            <p className="text-xs text-gray-500">FAQ, precios, políticas — escribe o sube un archivo</p>
           </div>
         </div>
-
         <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
           activeCount > 0
             ? "bg-purple-50 text-purple-700 border border-purple-200"
@@ -125,7 +135,6 @@ export default function DocumentsSource({ documents: initial }: Props) {
         </span>
       </div>
 
-      {/* Body */}
       <div className="p-5 flex flex-col gap-4">
 
         {/* Lista de documentos */}
@@ -134,11 +143,10 @@ export default function DocumentsSource({ documents: initial }: Props) {
             {docs.map((doc) => (
               <div
                 key={doc.id}
-                className={`border rounded-lg p-3 flex items-start gap-3 transition-colors ${
+                className={`border rounded-lg p-3 flex items-start gap-3 ${
                   doc.enabled ? "bg-white" : "bg-gray-50 opacity-60"
                 }`}
               >
-                {/* Toggle */}
                 <button
                   onClick={() => toggleEnabled(doc)}
                   className={`mt-0.5 relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
@@ -150,30 +158,22 @@ export default function DocumentsSource({ documents: initial }: Props) {
                   }`} />
                 </button>
 
-                {/* Content */}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-900">{doc.name}</p>
-                  <p className="text-xs text-gray-500 truncate mt-0.5">
-                    {doc.content.length > 120 ? doc.content.substring(0, 120) + "..." : doc.content}
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {doc.content.length.toLocaleString()} caracteres
                   </p>
                 </div>
 
-                {/* Actions */}
                 <div className="flex gap-1 shrink-0">
                   <button
                     onClick={() => openEdit(doc)}
                     className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
-                    title="Editar"
-                  >
-                    ✏️
-                  </button>
+                  >✏️</button>
                   <button
                     onClick={() => handleDelete(doc.id)}
                     className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"
-                    title="Eliminar"
-                  >
-                    🗑️
-                  </button>
+                  >🗑️</button>
                 </div>
               </div>
             ))}
@@ -182,7 +182,7 @@ export default function DocumentsSource({ documents: initial }: Props) {
 
         {/* Form inline */}
         {showForm ? (
-          <form onSubmit={handleSave} className="border border-purple-200 rounded-xl p-4 flex flex-col gap-3 bg-purple-50/30">
+          <form onSubmit={handleSave} className="border border-purple-200 rounded-xl p-4 flex flex-col gap-3 bg-purple-50/20">
             <h3 className="text-sm font-semibold text-gray-800">
               {editing ? "Editar documento" : "Nuevo documento"}
             </h3>
@@ -200,17 +200,17 @@ export default function DocumentsSource({ documents: initial }: Props) {
             </div>
 
             <div>
-              <label className="text-xs font-medium text-gray-700">Contenido</label>
-              <p className="text-xs text-gray-400 mb-1">
-                Pega o escribe el texto que el agente debe conocer
-              </p>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-medium text-gray-700">Contenido</label>
+                <span className="text-xs text-gray-400">{content.length.toLocaleString()} caracteres</span>
+              </div>
               <textarea
-                rows={6}
+                rows={7}
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                placeholder="Ej: Precio del producto A: $99. Envíos en 3-5 días hábiles. Aceptamos pagos con tarjeta y transferencia..."
+                placeholder="Escribe o pega el texto que el agente debe conocer..."
                 required
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none font-mono text-xs"
               />
             </div>
 
@@ -226,31 +226,44 @@ export default function DocumentsSource({ documents: initial }: Props) {
                 disabled={saving}
                 className="bg-gray-900 text-white text-sm px-4 py-2 rounded-lg hover:bg-gray-800 disabled:opacity-50"
               >
-                {saving ? "Guardando..." : editing ? "Actualizar" : "Guardar documento"}
+                {saving ? "Guardando..." : editing ? "Actualizar" : "Guardar"}
               </button>
-              <button
-                type="button"
-                onClick={cancelForm}
-                className="text-sm px-4 py-2 rounded-lg border hover:bg-gray-50"
-              >
+              <button type="button" onClick={cancelForm} className="text-sm px-4 py-2 rounded-lg border hover:bg-gray-50">
                 Cancelar
               </button>
             </div>
           </form>
         ) : (
-          <button
-            onClick={openCreate}
-            className="flex items-center gap-2 text-sm text-purple-700 font-medium border border-purple-200 border-dashed rounded-lg px-4 py-3 hover:bg-purple-50 transition-colors"
-          >
-            <span className="text-lg">+</span>
-            Agregar documento de conocimiento
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={openCreate}
+              className="flex-1 flex items-center justify-center gap-2 text-sm text-purple-700 font-medium border border-purple-200 border-dashed rounded-lg px-4 py-3 hover:bg-purple-50 transition-colors"
+            >
+              ✏️ Escribir documento
+            </button>
+
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={loadingFile}
+              className="flex-1 flex items-center justify-center gap-2 text-sm text-gray-600 font-medium border border-dashed rounded-lg px-4 py-3 hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              📁 {loadingFile ? "Leyendo..." : "Subir archivo"}
+            </button>
+
+            <input
+              ref={fileRef}
+              type="file"
+              accept={ACCEPTED}
+              className="hidden"
+              onChange={handleFileUpload}
+            />
+          </div>
         )}
 
         {docs.length === 0 && !showForm && (
-          <div className="text-center text-sm text-gray-400 py-2">
-            Agrega documentos como preguntas frecuentes, listas de precios o políticas de tu negocio.
-          </div>
+          <p className="text-center text-xs text-gray-400">
+            Soporta archivos .txt, .md, .csv, .json · Máx 1MB
+          </p>
         )}
       </div>
     </section>

@@ -7,7 +7,6 @@ import { createClient } from "@supabase/supabase-js"
 import { generateReply, transcribeAudio, describeImage } from "@/lib/ai"
 import { sendWhatsAppMessage, sendWhatsAppMedia, uploadMedia, markAsRead, downloadMedia } from "@/lib/whatsapp"
 import { getPropertyData, findImageUrl } from "@/lib/sheets"
-import { fetchCatalogProducts, catalogProductsToText } from "@/lib/whatsapp-catalog"
 
 // Deduplicación en memoria — evita reprocesar si Meta reenvía el webhook
 const recentlyProcessed = new Set<string>()
@@ -88,7 +87,7 @@ export async function POST(request: NextRequest) {
   // ── PASO 1: Tenant ──
   const { data: whatsappConfig } = await supabase
     .from("whatsapp_configs")
-    .select("tenant_id, access_token, phone_number_id, catalog_id")
+    .select("tenant_id, access_token, phone_number_id")
     .eq("phone_number_id", phoneNumberId)
     .single()
 
@@ -294,66 +293,60 @@ export async function POST(request: NextRequest) {
       content: msg.content,
     }))
 
-  // ── Fuentes de conocimiento ──
+  // ══ FUENTES DE CONOCIMIENTO DEL AGENTE ══
+  // Tres fuentes en paralelo para máxima velocidad
 
-  // 1. Google Sheets (solo si está habilitado)
-  const sheetsEnabled = catalogConfig?.enabled !== false
-  const sheetData = sheetsEnabled
-    ? await getPropertyData(catalogConfig?.sheet_id, catalogConfig?.sheet_gid)
-    : { text: "", imageMap: {} }
+  const [sheetResult, rentiaResult, docsResult] = await Promise.all([
 
-  // 2. Catálogo de WhatsApp Business (si tiene catalog_id configurado)
-  let waCatalogText = ""
-  if (whatsappConfig.catalog_id) {
-    const { products } = await fetchCatalogProducts(
-      whatsappConfig.catalog_id,
-      whatsappConfig.access_token!
-    )
-    if (products.length > 0) {
-      waCatalogText = catalogProductsToText(products)
-    }
-  }
+    // 1. Google Sheets (si está conectado y habilitado)
+    catalogConfig?.sheet_id && catalogConfig?.enabled !== false
+      ? getPropertyData(catalogConfig.sheet_id, catalogConfig.sheet_gid)
+      : Promise.resolve({ text: "", imageMap: {} }),
 
-  // 3. Catálogo nativo RentIA (productos con foto, precio y descripción)
-  const { data: rentiaProducts } = await supabase
-    .from("catalog_products")
-    .select("name, description, price, currency, image_url")
-    .eq("tenant_id", tenantId)
-    .eq("enabled", true)
+    // 2. Catálogo RentIA (productos creados en la app)
+    supabase
+      .from("catalog_products")
+      .select("name, description, price, currency, image_url")
+      .eq("tenant_id", tenantId)
+      .eq("enabled", true),
 
-  let rentiaCatalogText = ""
-  if (rentiaProducts && rentiaProducts.length > 0) {
-    const lines = rentiaProducts.map(p => {
-      const price = p.price != null ? ` — ${p.currency} ${p.price}` : ""
-      const desc  = p.description ? ` — ${p.description}` : ""
-      const foto  = p.image_url ? " [tiene foto disponible]" : ""
-      return `• ${p.name}${desc}${price}${foto}`
-    })
-    rentiaCatalogText = lines.join("\n")
-  }
+    // 3. Documentos subidos por el usuario
+    supabase
+      .from("knowledge_documents")
+      .select("name, content")
+      .eq("tenant_id", tenantId)
+      .eq("enabled", true),
+  ])
 
-  // Mapa de imágenes del catálogo RentIA para envío automático
+  const sheetData      = sheetResult
+  const rentiaProducts = rentiaResult.data ?? []
+  const knowledgeDocs  = docsResult.data ?? []
+
+  // Formatear catálogo RentIA como texto
+  const rentiaCatalogText = rentiaProducts.length > 0
+    ? rentiaProducts.map(p => {
+        const price = p.price != null ? ` — ${p.currency} ${p.price}` : ""
+        const desc  = p.description ? ` — ${p.description}` : ""
+        const foto  = p.image_url ? " [tiene foto disponible]" : ""
+        return `• ${p.name}${desc}${price}${foto}`
+      }).join("\n")
+    : ""
+
+  // Mapa de imágenes RentIA para envío automático por WhatsApp
   const rentiaCatalogImageMap: Record<string, string> = {}
-  for (const p of rentiaProducts ?? []) {
+  for (const p of rentiaProducts) {
     if (p.image_url) rentiaCatalogImageMap[p.name.toLowerCase()] = p.image_url
   }
 
-  // 4. Documentos de conocimiento (solo los habilitados)
-  const { data: knowledgeDocs } = await supabase
-    .from("knowledge_documents")
-    .select("name, content")
-    .eq("tenant_id", tenantId)
-    .eq("enabled", true)
-
-  const docsText = (knowledgeDocs ?? [])
+  // Formatear documentos
+  const docsText = knowledgeDocs
     .map(doc => `## ${doc.name}:\n${doc.content}`)
     .join("\n\n")
 
-  // Construir contexto de conocimiento combinado
+  // Ensamblar contexto final
   const knowledgeParts: string[] = []
-  if (rentiaCatalogText) knowledgeParts.push(`## Catálogo RentIA:\n${rentiaCatalogText}`)
-  if (waCatalogText)     knowledgeParts.push(`## Catálogo WhatsApp Business:\n${waCatalogText}`)
-  if (sheetData.text)    knowledgeParts.push(`## Inventario (Google Sheets):\n${sheetData.text}`)
+  if (rentiaCatalogText) knowledgeParts.push(`## Catálogo de productos:\n${rentiaCatalogText}`)
+  if (sheetData.text)    knowledgeParts.push(`## Inventario (Spreadsheet):\n${sheetData.text}`)
   if (docsText)          knowledgeParts.push(docsText)
 
   const knowledgeContext = knowledgeParts.join("\n\n")

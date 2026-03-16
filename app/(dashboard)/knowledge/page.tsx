@@ -1,9 +1,8 @@
 // Base de Conocimiento — Server Component
-// Gestiona las fuentes de información que usa el agente de IA
+// Las 3 fuentes de información del agente de IA
 
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
-import WhatsappCatalogSource from "./whatsapp-catalog-source"
 import SheetsSource from "./sheets-source"
 import DocumentsSource from "./documents-source"
 
@@ -24,7 +23,6 @@ export default async function KnowledgePage() {
   const [
     { data: catalogConfig },
     { data: documents },
-    { data: whatsappConfig },
     { data: rentiaProducts },
   ] = await Promise.all([
     supabase
@@ -38,22 +36,15 @@ export default async function KnowledgePage() {
       .eq("tenant_id", tenant.id)
       .order("created_at"),
     supabase
-      .from("whatsapp_configs")
-      .select("catalog_id, access_token, is_configured")
-      .eq("tenant_id", tenant.id)
-      .single(),
-    supabase
       .from("catalog_products")
       .select("id, enabled")
       .eq("tenant_id", tenant.id),
   ])
 
-  // Contar fuentes activas para el resumen
-  const sheetsActive    = !!(catalogConfig?.sheet_id && catalogConfig?.enabled !== false)
-  const catalogActive   = !!(whatsappConfig?.catalog_id)
-  const docsActive      = (documents ?? []).filter(d => d.enabled).length
-  const rentiaActive    = (rentiaProducts ?? []).filter(p => p.enabled).length
-  const totalSources    = [sheetsActive, catalogActive, docsActive > 0, rentiaActive > 0].filter(Boolean).length
+  const rentiaActive = (rentiaProducts ?? []).filter(p => p.enabled).length
+  const sheetsActive = !!(catalogConfig?.sheet_id && catalogConfig?.enabled !== false)
+  const docsActive   = (documents ?? []).filter(d => d.enabled).length
+  const totalActive  = [rentiaActive > 0, sheetsActive, docsActive > 0].filter(Boolean).length
 
   return (
     <div className="flex-1 overflow-auto p-6">
@@ -63,75 +54,80 @@ export default async function KnowledgePage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Base de Conocimiento</h1>
           <p className="text-gray-500 text-sm mt-1">
-            El agente de IA responde usando estas fuentes. Activa las que necesites.
+            El agente responde usando estas 3 fuentes. Activa las que necesites.
           </p>
         </div>
 
-        {/* Resumen de fuentes activas */}
-        <div className="grid grid-cols-4 gap-3">
-          <div className={`border rounded-xl p-4 text-center ${rentiaActive > 0 ? "bg-green-50 border-green-200" : "bg-gray-50"}`}>
+        {/* Resumen rápido */}
+        <div className="grid grid-cols-3 gap-3">
+          <a href="/catalog" className={`border rounded-xl p-4 text-center hover:shadow-sm transition-shadow ${rentiaActive > 0 ? "bg-green-50 border-green-200" : "bg-gray-50"}`}>
             <p className="text-2xl mb-1">📦</p>
-            <p className="text-xs font-medium text-gray-700">Catálogo RentIA</p>
+            <p className="text-xs font-medium text-gray-700">Catálogo</p>
             <p className={`text-xs mt-0.5 ${rentiaActive > 0 ? "text-green-600 font-medium" : "text-gray-400"}`}>
-              {rentiaActive > 0 ? `${rentiaActive} producto${rentiaActive > 1 ? "s" : ""}` : "Inactivo"}
+              {rentiaActive > 0 ? `${rentiaActive} producto${rentiaActive > 1 ? "s" : ""}` : "Sin productos"}
             </p>
-          </div>
-          <div className={`border rounded-xl p-4 text-center ${catalogActive ? "bg-green-50 border-green-200" : "bg-gray-50"}`}>
-            <p className="text-2xl mb-1">🛍️</p>
-            <p className="text-xs font-medium text-gray-700">Catálogo WA</p>
-            <p className={`text-xs mt-0.5 ${catalogActive ? "text-green-600 font-medium" : "text-gray-400"}`}>
-              {catalogActive ? "Activo" : "Inactivo"}
-            </p>
-          </div>
+          </a>
           <div className={`border rounded-xl p-4 text-center ${sheetsActive ? "bg-green-50 border-green-200" : "bg-gray-50"}`}>
             <p className="text-2xl mb-1">📊</p>
-            <p className="text-xs font-medium text-gray-700">Google Sheets</p>
+            <p className="text-xs font-medium text-gray-700">Spreadsheet</p>
             <p className={`text-xs mt-0.5 ${sheetsActive ? "text-green-600 font-medium" : "text-gray-400"}`}>
-              {sheetsActive ? "Activo" : "Inactivo"}
+              {sheetsActive ? "Conectado" : "Sin conectar"}
             </p>
           </div>
           <div className={`border rounded-xl p-4 text-center ${docsActive > 0 ? "bg-green-50 border-green-200" : "bg-gray-50"}`}>
             <p className="text-2xl mb-1">📄</p>
             <p className="text-xs font-medium text-gray-700">Documentos</p>
             <p className={`text-xs mt-0.5 ${docsActive > 0 ? "text-green-600 font-medium" : "text-gray-400"}`}>
-              {docsActive > 0 ? `${docsActive} activo${docsActive > 1 ? "s" : ""}` : "Inactivo"}
+              {docsActive > 0 ? `${docsActive} activo${docsActive > 1 ? "s" : ""}` : "Sin documentos"}
             </p>
           </div>
         </div>
 
-        {totalSources === 0 && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 text-sm text-yellow-800">
-            El agente no tiene ninguna fuente de conocimiento activa. Configura al menos una fuente para que pueda responder sobre tus productos.
+        {totalActive === 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
+            El agente no tiene ninguna fuente activa. Agrega productos al catálogo, conecta un spreadsheet o sube un documento.
           </div>
         )}
 
-        {/* Enlace rápido al catálogo RentIA */}
-        <a
-          href="/catalog"
-          className="flex items-center justify-between border rounded-xl p-4 hover:bg-gray-50 transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center text-lg">📦</div>
-            <div>
-              <p className="text-sm font-semibold text-gray-900">Catálogo RentIA</p>
-              <p className="text-xs text-gray-500">
-                {rentiaActive > 0
-                  ? `${rentiaActive} producto${rentiaActive > 1 ? "s" : ""} activo${rentiaActive > 1 ? "s" : ""}`
-                  : "Gestiona tus productos con fotos y precios"}
-              </p>
+        {/* ── Fuente 1: Catálogo RentIA ── */}
+        <section className="bg-white border rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between p-5 border-b">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center text-lg">📦</div>
+              <div>
+                <h2 className="text-base font-semibold text-gray-900">Catálogo de Productos</h2>
+                <p className="text-xs text-gray-500">Productos con foto, precio y descripción creados en RentIA</p>
+              </div>
             </div>
+            <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
+              rentiaActive > 0 ? "bg-green-50 text-green-700 border border-green-200" : "bg-gray-100 text-gray-500"
+            }`}>
+              {rentiaActive > 0 ? `${rentiaActive} activo${rentiaActive > 1 ? "s" : ""}` : "Vacío"}
+            </span>
           </div>
-          <span className="text-gray-400 text-sm">Gestionar →</span>
-        </a>
+          <div className="p-5">
+            {rentiaActive > 0 ? (
+              <p className="text-sm text-gray-600 mb-3">
+                El agente conoce {rentiaActive} producto{rentiaActive > 1 ? "s" : ""} y puede enviar sus fotos automáticamente por WhatsApp.
+              </p>
+            ) : (
+              <p className="text-sm text-gray-500 mb-3">
+                Aún no tienes productos. Crea tu catálogo y el agente podrá responder preguntas y enviar fotos.
+              </p>
+            )}
+            <a
+              href="/catalog"
+              className="inline-flex items-center gap-2 bg-gray-900 text-white text-sm px-4 py-2 rounded-lg hover:bg-gray-800"
+            >
+              {rentiaActive > 0 ? "Gestionar catálogo" : "Crear primer producto"} →
+            </a>
+          </div>
+        </section>
 
-        {/* Fuentes externas */}
-        <WhatsappCatalogSource
-          catalogId={whatsappConfig?.catalog_id ?? null}
-          isConfigured={!!(whatsappConfig?.access_token)}
-        />
-
+        {/* ── Fuente 2: Google Sheets ── */}
         <SheetsSource config={catalogConfig} />
 
+        {/* ── Fuente 3: Documentos ── */}
         <DocumentsSource documents={documents ?? []} />
 
       </div>
