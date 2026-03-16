@@ -1,6 +1,6 @@
 "use client"
 
-import { Bell, Search } from "lucide-react"
+import { Bell } from "lucide-react"
 import ThemeToggle from "@/components/theme-toggle"
 import { useState, useEffect } from "react"
 
@@ -32,22 +32,10 @@ export default function Header({ name }: { name: string }) {
 
       {/* Saludo */}
       <div className="flex-1 min-w-0 hidden md:block">
-        <p className="text-[13px] font-semibold text-slate-200 truncate">
+        <p className="text-[15px] font-semibold text-slate-200 truncate">
           {greeting ? `${greeting}, ${name} 👋` : ""}
         </p>
-        <p className="text-[10px] text-slate-500 truncate">{dateFormatted}</p>
-      </div>
-
-      {/* Búsqueda */}
-      <div className="flex-1 max-w-sm relative">
-        <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-        <input
-          type="text"
-          placeholder="Buscar productos, clientes, pedidos..."
-          className="w-full pl-9 pr-4 py-1.5 text-xs bg-slate-800/60 border border-slate-700/50 rounded-xl
-            focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50
-            text-slate-300 placeholder-slate-600 transition-all duration-200"
-        />
+        <p className="text-xs text-slate-500 truncate mt-0.5">{dateFormatted}</p>
       </div>
 
       {/* Acciones */}

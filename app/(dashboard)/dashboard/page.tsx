@@ -52,7 +52,7 @@ export default async function DashboardPage() {
       .eq("tenant_id", tenant.id).order("updated_at", { ascending: false }).limit(8),
     supabase.from("catalog_products")
       .select("id, name, price, currency, enabled, image_url")
-      .eq("tenant_id", tenant.id).eq("enabled", true).order("name").limit(6),
+      .eq("tenant_id", tenant.id).eq("enabled", true).order("name").limit(10),
     supabase.from("catalog_products").select("*", { count: "exact", head: true }).eq("tenant_id", tenant.id).eq("enabled", true),
     supabase.from("orders").select("*", { count: "exact", head: true }).eq("tenant_id", tenant.id).eq("status", "pending"),
   ])
@@ -146,9 +146,11 @@ export default async function DashboardPage() {
         </div>
 
         {/* Panel derecho — 2/5 */}
-        <div className="lg:col-span-2 flex flex-col gap-5">
+        <div className="lg:col-span-2 flex flex-col gap-5 min-h-0">
           <QuickActions />
-          <ProductList products={(products ?? []) as any} />
+          <div className="flex-1 min-h-0">
+            <ProductList products={(products ?? []) as any} />
+          </div>
         </div>
 
       </div>
