@@ -42,14 +42,14 @@ export async function describeImage(buffer: Buffer, mimeType: string): Promise<s
 
 const JSON_FORMAT_INSTRUCTION = `
 
-FORMATO DE RESPUESTA OBLIGATORIO — responde SIEMPRE con este JSON en una sola línea, sin markdown ni texto fuera:
+FORMATO DE RESPUESTA OBLIGATORIO — responde SIEMPRE con este JSON exacto en una sola línea, sin markdown ni texto fuera. NUNCA omitas ningún campo — el JSON debe tener los 5 campos siempre:
 {"reply":"mensaje al cliente","product_name":null,"send_location":false,"handover":false,"lead_notes":null}
 
 Reglas:
 - reply: tu mensaje al cliente.
 - product_name: si el cliente pide ver la foto de un producto o estás describiendo uno específico, escribe el nombre exacto del modelo como aparece en los datos (ej: "Samsung Galaxy A07"). Pon null si no aplica. NO pongas URLs ni rutas de archivo.
 - send_location: pon true ÚNICAMENTE si el cliente pregunta por la dirección, ubicación o cómo llegar a la tienda. Pon false en todos los demás casos.
-- handover: pon true ÚNICAMENTE cuando el cliente confirme en firme un pedido, reserva o entrega (ej: "sí, lo quiero", "confírmalo", "apártalo", "listo, lo compro"). Antes de ese momento gestiona tú el proceso. Una vez que confirmen, responde SOLO con algo breve como "Dame un momento ⏳" y pon handover en true. También pon true si el cliente pide hablar con un humano o expresa frustración repetida. Pon false en todos los demás casos.
+- handover: pon true en dos situaciones: (1) cuando el cliente responda cuál es su método de pago (ej: "transferencia", "efectivo", "tarjeta", "Cardnet"), o (2) cuando el cliente confirme en firme el pedido después de recibir el resumen o el precio de envío (ej: "sí", "listo", "dale", "confírmalo", "lo quiero"). En cualquiera de esos casos responde SOLO con "Dame un momento ⏳" y pon handover en true. También pon true si el cliente pide hablar con un humano o expresa frustración repetida. Pon false en todos los demás casos.
 - lead_notes: si en este mensaje el cliente reveló información relevante (nombre, producto de interés, presupuesto, zona, urgencia, contexto de compra), escribe un resumen breve en español de máximo 2 oraciones. Si no hay información nueva relevante, pon null.`
 
 export type AIReply = {
@@ -110,11 +110,14 @@ export async function generateReply({
   try {
     const cleaned = raw.replace(/^```json\s*/i, "").replace(/\s*```$/, "")
     const parsed  = JSON.parse(cleaned)
+    const reply   = (parsed.reply ?? "").trim()
+    // Fallback de seguridad: si el reply incluye "Dame un momento" pero handover no está en true, forzarlo
+    const handover = parsed.handover === true || reply.toLowerCase().includes("dame un momento")
     return {
-      reply:        (parsed.reply ?? "").trim(),
+      reply,
       productName:  parsed.product_name && parsed.product_name !== "null" ? parsed.product_name : null,
       sendLocation: parsed.send_location === true,
-      handover:     parsed.handover === true,
+      handover,
       leadNotes:    parsed.lead_notes && parsed.lead_notes !== "null" ? parsed.lead_notes.trim() : null,
     }
   } catch {

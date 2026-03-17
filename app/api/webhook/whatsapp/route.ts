@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { generateReply, transcribeAudio, describeImage } from "@/lib/ai"
-import { sendWhatsAppMessage, sendWhatsAppMedia, sendWhatsAppLocation, uploadMedia, markAsRead, downloadMedia } from "@/lib/whatsapp"
+import { sendWhatsAppMessage, sendWhatsAppMedia, sendWhatsAppLocation, uploadMedia, markAsRead, downloadMedia, sendWhatsAppTemplate } from "@/lib/whatsapp"
 import { getPropertyData, findImageUrl } from "@/lib/sheets"
 
 // Deduplicación en memoria — evita reprocesar si Meta reenvía el webhook
@@ -58,6 +58,8 @@ export async function POST(request: NextRequest) {
   const whatsappMsgId    = message.id
   const phoneNumberId    = value?.metadata?.phone_number_id
   const contactName: string | null = value?.contacts?.[0]?.profile?.name ?? null
+  const referral         = message.referral ?? null   // presente cuando el cliente llega desde un anuncio CTWA
+  if (referral) console.log(`📣 Referral recibido:`, JSON.stringify(referral))
 
   const supported = ["text", "audio", "voice", "image"]
   if (!supported.includes(message.type)) {
@@ -189,6 +191,8 @@ export async function POST(request: NextRequest) {
   let aiPaused         = false
   let awaitingApproval = false
 
+  let isNewConversation = false
+
   if (existingConversation) {
     conversationId = existingConversation.id
     aiPaused       = existingConversation.ai_paused ?? false
@@ -212,7 +216,41 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ status: "ok" }, { status: 200 })
     }
 
-    conversationId = newConversation.id
+    conversationId    = newConversation.id
+    isNewConversation = true
+
+    // Si el cliente llegó desde un anuncio, guardarlo como nota en el contacto
+    if (referral?.headline) {
+      const adNote = `[Origen: Anuncio "${referral.headline}"${referral.source_id ? ` (ID: ${referral.source_id})` : ""}]`
+      const { data: currentContact } = await supabase
+        .from("contacts").select("notes").eq("id", contact.id).single()
+      const updatedNotes = currentContact?.notes
+        ? `${currentContact.notes}\n${adNote}`
+        : adNote
+      await supabase.from("contacts").update({ notes: updatedNotes }).eq("id", contact.id)
+      console.log(`📣 Cliente de anuncio "${referral.headline}" — nota guardada para ${from}`)
+
+      // Mostrar la imagen del anuncio en el chat (si viene con imagen)
+      if (referral.image_url) {
+        await supabase.from("messages").insert([
+          {
+            conversation_id: conversationId,
+            content:         `📣 Anuncio: "${referral.headline}"`,
+            direction:       "inbound",
+            sent_by_ai:      false,
+            message_type:    "text",
+          },
+          {
+            conversation_id: conversationId,
+            content:         referral.image_url,
+            direction:       "inbound",
+            sent_by_ai:      false,
+            message_type:    "image",
+          },
+        ])
+        console.log(`🖼️ Imagen del anuncio guardada en el chat para ${from}`)
+      }
+    }
   }
 
   // ── PASO 5: Guardar mensaje entrante ──
@@ -355,9 +393,14 @@ export async function POST(request: NextRequest) {
     ? `${aiConfig.system_prompt}\n\n${knowledgeContext}`
     : aiConfig.system_prompt
 
+  // Contexto del anuncio (solo si es conversación nueva y hay referral)
+  const referralContext = isNewConversation && referral?.headline
+    ? `\n\nCONTEXTO DE ORIGEN: Este cliente llegó haciendo clic en el anuncio "${referral.headline}"${referral.body ? ` ("${referral.body}")` : ""}. IMPORTANTE: si el cliente dice "esto", "eso", "lo del anuncio", "quiero eso" o cualquier expresión vaga, asume que se refiere al producto de ese anuncio. No le preguntes a qué se refiere — respóndele directamente sobre ese producto.`
+    : ""
+
   const systemPrompt = history.length > 0
     ? `${basePrompt}\n\nIMPORTANTE: Ya has interactuado con este cliente antes. NO vuelvas a saludarlo. Continúa la conversación de forma natural.`
-    : basePrompt
+    : `${basePrompt}${referralContext}`
 
   // Helper fallback
   const sendFallback = async () => {
@@ -390,7 +433,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "ok" }, { status: 200 })
   }
 
-  const { reply, productName, sendLocation, handover, leadNotes } = aiReply
+  const { reply, productName, sendLocation, leadNotes } = aiReply
+  // Doble seguro: si Gemini olvida poner handover:true pero dijo "Dame un momento", lo forzamos aquí
+  const handover = aiReply.handover || reply.toLowerCase().includes("dame un momento")
+  console.log(`🔀 handover=${handover} (ai=${aiReply.handover}, reply_check=${reply.toLowerCase().includes("dame un momento")})`)
 
   // ── Guardar notas del lead si la IA detectó información relevante ──
   if (leadNotes) {
@@ -421,11 +467,17 @@ export async function POST(request: NextRequest) {
     const alertMsg    = `🛒 *Pedido confirmado*\n\nCliente: *${clientName}*\nTeléfono: ${from}${orderDetail}\n\n👉 Coordina el pago y la entrega.`
 
     const ALERT_NUMBERS = ["18094173098", "18292856400"]
+    const templateParams = [
+      clientName,
+      from,
+      leadNotes ? `Detalle: ${leadNotes}` : "Sin detalles adicionales",
+    ]
     const results = await Promise.allSettled(
       ALERT_NUMBERS.map((num) =>
-        sendWhatsAppMessage({
-          to:            num,
-          message:       alertMsg,
+        sendWhatsAppTemplate({
+          to:           num,
+          templateName: "pedido_confirmado",
+          parameters:   templateParams,
           phoneNumberId: whatsappConfig.phone_number_id!,
           accessToken:   whatsappConfig.access_token!,
         })

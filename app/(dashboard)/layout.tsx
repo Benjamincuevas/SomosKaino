@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
-import Sidebar from "@/components/Sidebar"
-import Header from "@/components/Header"
+import Sidebar    from "@/components/Sidebar"
+import Header     from "@/components/Header"
+import MobileNav  from "@/components/MobileNav"
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
@@ -19,10 +20,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <Sidebar tenantName={tenantName} email={email} />
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         <Header name={tenantName} />
-        <main className="flex-1 overflow-hidden">
+        <main className="flex-1 overflow-hidden pb-16 md:pb-0">
           {children}
         </main>
       </div>
+      <MobileNav />
     </div>
   )
 }

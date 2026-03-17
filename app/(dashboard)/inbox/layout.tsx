@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
-import InboxList from "./inbox-list"
+import InboxList   from "./inbox-list"
+import InboxPanels from "./inbox-panels"
 
 export default async function InboxLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
@@ -19,19 +20,15 @@ export default async function InboxLayout({ children }: { children: React.ReactN
     .order("updated_at", { ascending: false })
 
   return (
-    <div className="h-full flex overflow-hidden">
-      {/* ── Panel izquierdo — lista de chats ── */}
-      <div className="w-80 shrink-0 border-r border-slate-800/60 flex flex-col bg-slate-900/50 overflow-hidden">
+    <InboxPanels
+      sidebar={
         <InboxList
           initialConversations={(conversations ?? []) as any}
           tenantId={tenant.id}
         />
-      </div>
-
-      {/* ── Panel central + derecho (children) ── */}
-      <div className="flex-1 flex overflow-hidden">
-        {children}
-      </div>
-    </div>
+      }
+    >
+      {children}
+    </InboxPanels>
   )
 }

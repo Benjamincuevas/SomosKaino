@@ -228,6 +228,54 @@ export async function sendWhatsAppImageByUrl({
   return response.json()
 }
 
+// Envía un mensaje usando una plantilla (template) aprobada por Meta
+// Útil para notificaciones a números que no han escrito en las últimas 24h
+export async function sendWhatsAppTemplate({
+  to,
+  templateName,
+  languageCode = "es",
+  parameters,
+  phoneNumberId,
+  accessToken,
+}: {
+  to: string
+  templateName: string
+  languageCode?: string
+  parameters: string[]   // valores para {{1}}, {{2}}, etc.
+  phoneNumberId: string
+  accessToken: string
+}) {
+  const response = await fetch(`${WHATSAPP_API_URL}/${phoneNumberId}/messages`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${accessToken}`,
+      "Content-Type":  "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "template",
+      template: {
+        name:     templateName,
+        language: { code: languageCode },
+        components: [
+          {
+            type:       "body",
+            parameters: parameters.map(text => ({ type: "text", text })),
+          },
+        ],
+      },
+    }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(`Error de WhatsApp Template API: ${JSON.stringify(error)}`)
+  }
+
+  return response.json()
+}
+
 // Marca un mensaje como leído (palomitas azules)
 export async function markAsRead({
   messageId,

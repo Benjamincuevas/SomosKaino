@@ -51,7 +51,7 @@ export default function Sidebar({ tenantName, email }: { tenantName: string; ema
   }
 
   return (
-    <aside className="w-56 bg-slate-900/80 backdrop-blur-xl border-r border-slate-800/60 flex flex-col shrink-0">
+    <aside className="hidden md:flex w-56 bg-slate-900/80 backdrop-blur-xl border-r border-slate-800/60 flex-col shrink-0">
 
       {/* Logo */}
       <div className="px-4 h-14 flex items-center border-b border-slate-800/60 shrink-0">
