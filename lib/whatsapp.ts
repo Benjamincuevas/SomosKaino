@@ -39,6 +39,46 @@ export async function sendWhatsAppMessage({
   return response.json()
 }
 
+// Envía un mensaje de ubicación
+export async function sendWhatsAppLocation({
+  to,
+  latitude,
+  longitude,
+  name,
+  address,
+  phoneNumberId,
+  accessToken,
+}: {
+  to:            string
+  latitude:      number
+  longitude:     number
+  name:          string
+  address:       string
+  phoneNumberId: string
+  accessToken:   string
+}) {
+  const response = await fetch(`${WHATSAPP_API_URL}/${phoneNumberId}/messages`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${accessToken}`,
+      "Content-Type":  "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to,
+      type: "location",
+      location: { latitude, longitude, name, address },
+    }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(`Error de WhatsApp API: ${JSON.stringify(error)}`)
+  }
+
+  return response.json()
+}
+
 // Descarga un archivo de media de WhatsApp (audio, imagen, etc.)
 // Paso 1: obtener la URL real del media usando su ID
 // Paso 2: descargar el archivo con el token de acceso

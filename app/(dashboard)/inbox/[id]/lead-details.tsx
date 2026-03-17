@@ -1,6 +1,7 @@
-import { Phone, Calendar, Bot, PauseCircle, UserCheck, MessageSquare } from "lucide-react"
+import { Phone, Calendar, Bot, PauseCircle, UserCheck } from "lucide-react"
 import Link from "next/link"
 import ProductSearch from "./product-search"
+import SendLocationButton from "./send-location-button"
 
 type Props = {
   displayName:    string
@@ -12,8 +13,7 @@ type Props = {
 }
 
 const QUICK_ACTIONS = [
-  { label: "Agendar visita",       icon: Calendar,      color: "text-blue-400",   bg: "bg-blue-500/10 hover:bg-blue-500/20 border-blue-500/20" },
-  { label: "Solicitar documentos", icon: MessageSquare, color: "text-purple-400", bg: "bg-purple-500/10 hover:bg-purple-500/20 border-purple-500/20" },
+  { label: "Agendar visita", icon: Calendar, color: "text-blue-400", bg: "bg-blue-500/10 hover:bg-blue-500/20 border-blue-500/20" },
 ]
 
 export default function LeadDetails({ displayName, phone, avatarColor, aiPaused, status, conversationId }: Props) {
@@ -98,6 +98,8 @@ export default function LeadDetails({ displayName, phone, avatarColor, aiPaused,
               <span className={`text-xs font-medium ${action.color}`}>{action.label}</span>
             </button>
           ))}
+
+          <SendLocationButton conversationId={conversationId} />
 
           {/* Buscador de productos */}
           <div className="mt-1">
