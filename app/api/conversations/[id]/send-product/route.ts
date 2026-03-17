@@ -68,7 +68,7 @@ export async function POST(
 
           await supabase.from("messages").insert({
             conversation_id:     params.id,
-            content:             "🖼️ Imagen",
+            content:             imageUrl,   // URL original para mostrarla en el chat
             direction:           "outbound",
             sent_by_ai:          false,
             whatsapp_message_id: sent?.messages?.[0]?.id ?? null,

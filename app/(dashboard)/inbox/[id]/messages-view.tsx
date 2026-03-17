@@ -107,14 +107,20 @@ export default function MessagesView({ messages: initial, avatarColor, contactIn
                       <span className="text-xs opacity-70">🎤 Nota de voz</span>
                       <audio controls preload="none" className="h-8 w-48 max-w-full" src={`/api/media/${msg.media_id}`} />
                     </div>
-                  ) : msg.message_type === "image" && msg.media_id ? (
-                    <img
-                      src={`/api/media/${msg.media_id}`}
-                      alt="Imagen"
-                      className="rounded-xl max-w-[240px] max-h-[320px] object-cover cursor-pointer"
-                      onClick={() => window.open(`/api/media/${msg.media_id}`, "_blank")}
-                    />
-                  ) : (
+                  ) : msg.message_type === "image" ? (() => {
+                    // Outbound con URL directa (producto) o inbound via proxy
+                    const src = msg.content?.startsWith("http")
+                      ? msg.content
+                      : `/api/media/${msg.media_id}`
+                    return (
+                      <img
+                        src={src}
+                        alt="Imagen"
+                        className="rounded-xl max-w-[240px] max-h-[320px] object-cover cursor-pointer"
+                        onClick={() => window.open(src, "_blank")}
+                      />
+                    )
+                  })() : (
                     msg.content
                   )}
                 </div>
