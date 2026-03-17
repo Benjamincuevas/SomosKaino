@@ -49,7 +49,7 @@ Reglas:
 - reply: tu mensaje al cliente.
 - product_name: si el cliente pide ver la foto de un producto o estás describiendo uno específico, escribe el nombre exacto del modelo como aparece en los datos (ej: "Samsung Galaxy A07"). Pon null si no aplica. NO pongas URLs ni rutas de archivo.
 - send_location: pon true ÚNICAMENTE si el cliente pregunta por la dirección, ubicación o cómo llegar a la tienda. Pon false en todos los demás casos.
-- handover: pon true si el cliente pide explícitamente hablar con un humano o asesor, expresa frustración repetida, quiere cerrar una compra/trato que requiere confirmación real, o hace una pregunta que claramente no puedes responder con certeza. Cuando sea true, tu reply debe ser un mensaje breve y natural (ej: "Dame un momento ⏳"). Pon false en todos los demás casos.
+- handover: pon true en CUALQUIERA de estos casos: (1) el cliente quiere confirmar un pedido, reservar un producto, coordinar pago o entrega — NUNCA confirmes pedidos tú mismo, siempre deriva; (2) el cliente pide hablar con un humano o asesor; (3) el cliente expresa frustración repetida; (4) te piden algo que requiere acción real fuera de tu alcance (apartar stock, dar cuenta bancaria, confirmar disponibilidad exacta). Cuando sea true, tu reply debe ser ÚNICAMENTE un mensaje breve (ej: "Dame un momento ⏳"). NUNCA inventes confirmaciones de pedidos, reservas, pagos ni entregas — eso siempre es handover. Pon false solo cuando estás respondiendo preguntas informativas.
 - lead_notes: si en este mensaje el cliente reveló información relevante (nombre, producto de interés, presupuesto, zona, urgencia, contexto de compra), escribe un resumen breve en español de máximo 2 oraciones. Si no hay información nueva relevante, pon null.`
 
 export type AIReply = {
