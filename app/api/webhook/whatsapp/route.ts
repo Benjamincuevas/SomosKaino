@@ -334,14 +334,14 @@ export async function POST(request: NextRequest) {
   // ══ FUENTES DE CONOCIMIENTO DEL AGENTE ══
   // Tres fuentes en paralelo para máxima velocidad
 
-  const [sheetResult, rentiaResult, docsResult] = await Promise.all([
+  const [sheetResult, kainoResult, docsResult] = await Promise.all([
 
     // 1. Google Sheets (si está conectado y habilitado)
     catalogConfig?.sheet_id && catalogConfig?.enabled !== false
       ? getPropertyData(catalogConfig.sheet_id, catalogConfig.sheet_gid)
       : Promise.resolve({ text: "", imageMap: {} }),
 
-    // 2. Catálogo RentIA (productos creados en la app)
+    // 2. Catálogo SomosKaino (productos creados en la app)
     supabase
       .from("catalog_products")
       .select("name, description, price, currency, image_url")
@@ -357,12 +357,12 @@ export async function POST(request: NextRequest) {
   ])
 
   const sheetData      = sheetResult
-  const rentiaProducts = rentiaResult.data ?? []
+  const kainoProducts = kainoResult.data ?? []
   const knowledgeDocs  = docsResult.data ?? []
 
-  // Formatear catálogo RentIA como texto
-  const rentiaCatalogText = rentiaProducts.length > 0
-    ? rentiaProducts.map(p => {
+  // Formatear catálogo SomosKaino como texto
+  const kainoCatalogText = kainoProducts.length > 0
+    ? kainoProducts.map(p => {
         const price = p.price != null ? ` — ${p.currency} ${p.price}` : ""
         const desc  = p.description ? ` — ${p.description}` : ""
         const foto  = p.image_url ? " [tiene foto disponible]" : ""
@@ -370,10 +370,10 @@ export async function POST(request: NextRequest) {
       }).join("\n")
     : ""
 
-  // Mapa de imágenes RentIA para envío automático por WhatsApp
-  const rentiaCatalogImageMap: Record<string, string> = {}
-  for (const p of rentiaProducts) {
-    if (p.image_url) rentiaCatalogImageMap[p.name.toLowerCase()] = p.image_url
+  // Mapa de imágenes SomosKaino para envío automático por WhatsApp
+  const kainoCatalogImageMap: Record<string, string> = {}
+  for (const p of kainoProducts) {
+    if (p.image_url) kainoCatalogImageMap[p.name.toLowerCase()] = p.image_url
   }
 
   // Formatear documentos
@@ -383,7 +383,7 @@ export async function POST(request: NextRequest) {
 
   // Ensamblar contexto final
   const knowledgeParts: string[] = []
-  if (rentiaCatalogText) knowledgeParts.push(`## Catálogo de productos:\n${rentiaCatalogText}`)
+  if (kainoCatalogText) knowledgeParts.push(`## Catálogo de productos:\n${kainoCatalogText}`)
   if (sheetData.text)    knowledgeParts.push(`## Inventario (Spreadsheet):\n${sheetData.text}`)
   if (docsText)          knowledgeParts.push(docsText)
 
@@ -528,10 +528,10 @@ export async function POST(request: NextRequest) {
   }
 
   // ── Enviar imagen del producto si el AI lo indicó ──
-  // Busca en: 1) Catálogo RentIA  2) Google Sheets
+  // Busca en: 1) Catálogo SomosKaino  2) Google Sheets
   if (productName) {
     const imageUrl =
-      findImageUrl(productName, rentiaCatalogImageMap) ??
+      findImageUrl(productName, kainoCatalogImageMap) ??
       findImageUrl(productName, sheetData.imageMap)
     if (imageUrl) {
       try {

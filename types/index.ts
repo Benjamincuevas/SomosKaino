@@ -1,9 +1,9 @@
-// Tipos TypeScript de RentIA
+// Tipos TypeScript de SomosKaino
 // Definen la "forma" de los datos que usaremos en toda la app
 // Deben coincidir exactamente con las columnas de Supabase
 
 // ── TENANT ──
-// Un tenant = una empresa/agente que usa RentIA (multi-tenant SaaS)
+// Un tenant = una empresa/agente que usa SomosKaino (multi-tenant SaaS)
 export type Tenant = {
   id: string
   owner_id: string  // ID del usuario de Supabase Auth

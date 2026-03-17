@@ -5,10 +5,10 @@ import { useState } from "react"
 type Props = {
   catalogId:     string | null
   isConfigured:  boolean   // tiene access_token
-  rentiaCount:   number    // productos activos en RentIA
+  kainoCount:   number    // productos activos en SomosKaino
 }
 
-export default function WhatsappCatalogSource({ catalogId, isConfigured, rentiaCount }: Props) {
+export default function WhatsappCatalogSource({ catalogId, isConfigured, kainoCount }: Props) {
   const [id, setId]             = useState(catalogId ?? "")
   const [status, setStatus]     = useState<"idle" | "loading" | "success" | "error">("idle")
   const [errorMsg, setErrorMsg] = useState("")
@@ -63,7 +63,7 @@ export default function WhatsappCatalogSource({ catalogId, isConfigured, rentiaC
           <div>
             <h2 className="text-base font-semibold text-gray-900">Publicar en WhatsApp Business</h2>
             <p className="text-xs text-gray-500">
-              Conecta tu catálogo de Meta para publicar los productos de RentIA ahí también
+              Conecta tu catálogo de Meta para publicar los productos de SomosKaino ahí también
             </p>
           </div>
         </div>
@@ -81,10 +81,10 @@ export default function WhatsappCatalogSource({ catalogId, isConfigured, rentiaC
       <div className="p-5 flex flex-col gap-4">
 
         {/* Aviso: productos pendientes de subir */}
-        {!isActive && rentiaCount > 0 && (
+        {!isActive && kainoCount > 0 && (
           <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-sm text-amber-800">
             <p className="font-medium">
-              Tienes {rentiaCount} producto{rentiaCount > 1 ? "s" : ""} en tu catálogo RentIA
+              Tienes {kainoCount} producto{kainoCount > 1 ? "s" : ""} en tu catálogo SomosKaino
             </p>
             <p className="text-xs mt-0.5 text-amber-600">
               Al conectar el catálogo de WhatsApp Business, se subirán automáticamente todos.
@@ -124,8 +124,8 @@ export default function WhatsappCatalogSource({ catalogId, isConfigured, rentiaC
                 >
                   {status === "loading"
                     ? "Conectando..."
-                    : rentiaCount > 0
-                    ? `Conectar y subir ${rentiaCount} producto${rentiaCount > 1 ? "s" : ""}`
+                    : kainoCount > 0
+                    ? `Conectar y subir ${kainoCount} producto${kainoCount > 1 ? "s" : ""}`
                     : "Conectar catálogo"}
                 </button>
               </div>
@@ -154,7 +154,7 @@ export default function WhatsappCatalogSource({ catalogId, isConfigured, rentiaC
             <p className="text-sm font-medium text-green-800">✅ {message || "Listo"}</p>
             {syncedCount > 0 && (
               <p className="text-xs text-green-600 mt-0.5">
-                De ahora en adelante, cada producto que crees o edites en RentIA se publicará automáticamente.
+                De ahora en adelante, cada producto que crees o edites en SomosKaino se publicará automáticamente.
               </p>
             )}
           </div>

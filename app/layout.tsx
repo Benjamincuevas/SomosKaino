@@ -10,7 +10,7 @@ const inter = Inter({ subsets: ["latin"] })
 
 // Metadata: lo que ve Google y las redes sociales
 export const metadata: Metadata = {
-  title: "RentIA - CRM con IA para WhatsApp",
+  title: "SomosKaino - CRM con IA para WhatsApp",
   description: "Gestiona tus leads de bienes raíces con inteligencia artificial",
 }
 

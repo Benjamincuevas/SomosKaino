@@ -7,7 +7,7 @@ export default function LandingPage() {
 
       {/* ── NAVBAR ── */}
       <nav className="flex items-center justify-between px-6 py-4 border-b">
-        <span className="text-xl font-bold text-green-600">RentIA</span>
+        <span className="text-xl font-bold text-green-600">SomosKaino</span>
         <div className="flex gap-4">
           <a href="/login" className="text-sm text-gray-600 hover:text-gray-900">
             Iniciar sesión
@@ -28,7 +28,7 @@ export default function LandingPage() {
           <span className="text-green-600">IA en WhatsApp</span>
         </h1>
         <p className="text-xl text-gray-500 max-w-xl">
-          RentIA responde a tus leads automáticamente, los califica y te avisa
+          SomosKaino responde a tus leads automáticamente, los califica y te avisa
           cuando están listos para cerrar. Para agentes inmobiliarios.
         </p>
         <a

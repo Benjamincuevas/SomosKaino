@@ -42,7 +42,7 @@ export default async function CatalogPage() {
         {/* Header */}
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Catálogo RentIA</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Catálogo SomosKaino</h1>
             <p className="text-gray-500 text-sm mt-1">
               Crea y gestiona tus productos. El agente los usa para responder y enviar fotos por WhatsApp.
             </p>

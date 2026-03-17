@@ -1,4 +1,4 @@
-# 🤖 RentIA
+# 🤖 SomosKaino
 
 **CRM con IA para WhatsApp** — Automatiza conversaciones, califica leads y agenda citas 24/7.
 
@@ -11,7 +11,7 @@
 
 ## 📋 Descripción
 
-RentIA es un SaaS que permite a negocios automatizar sus ventas por WhatsApp usando inteligencia artificial. El agente de IA responde mensajes, califica prospectos y agenda citas automáticamente, permitiendo a los equipos comerciales enfocarse solo en cerrar ventas.
+SomosKaino es un SaaS que permite a negocios automatizar sus ventas por WhatsApp usando inteligencia artificial. El agente de IA responde mensajes, califica prospectos y agenda citas automáticamente, permitiendo a los equipos comerciales enfocarse solo en cerrar ventas.
 
 ### ¿Para quién es?
 - 🏢 Agencias de marketing
@@ -163,5 +163,5 @@ Desarrollado con ❤️ en República Dominicana
 ---
 
 <p align="center">
-  <b>RentIA</b> — Convierte conversaciones en clientes
+  <b>SomosKaino</b> — Convierte conversaciones en clientes
 </p>

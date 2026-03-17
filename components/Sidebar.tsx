@@ -59,7 +59,7 @@ export default function Sidebar({ tenantName, email }: { tenantName: string; ema
           <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/20">
             <Zap size={14} className="text-white" strokeWidth={2.5} />
           </div>
-          <span className="text-[15px] font-bold text-white tracking-tight">RentIA</span>
+          <span className="text-[15px] font-bold text-white tracking-tight">SomosKaino</span>
         </div>
       </div>
 

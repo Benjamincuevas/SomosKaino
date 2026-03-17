@@ -1,4 +1,4 @@
-// POST — sincroniza todos los productos activos de RentIA con el catálogo de WhatsApp Business
+// POST — sincroniza todos los productos activos de SomosKaino con el catálogo de WhatsApp Business
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { syncAllProductsToMeta } from "@/lib/whatsapp-catalog"

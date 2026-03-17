@@ -1,4 +1,4 @@
-// POST /api/conversations/[id]/send-media — envía imagen o audio desde Rentia
+// POST /api/conversations/[id]/send-media — envía imagen o audio desde SomosKaino
 // Recibe FormData con: file (Blob), type ("image" | "audio")
 
 import { NextRequest, NextResponse } from "next/server"

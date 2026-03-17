@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { syncAllProductsToMeta } from "@/lib/whatsapp-catalog"
 
-// POST — conectar catalog_id y subir todos los productos existentes de RentIA a Meta
+// POST — conectar catalog_id y subir todos los productos existentes de SomosKaino a Meta
 export async function POST(request: NextRequest) {
   const supabase = createClient()
 
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, synced: 0 })
   }
 
-  // Obtener todos los productos activos de RentIA
+  // Obtener todos los productos activos de SomosKaino
   const { data: products } = await supabase
     .from("catalog_products")
     .select("id, name, description, price, currency, image_url")
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
       success: true,
       synced:  0,
       message: isNewConnection
-        ? "Catálogo conectado. Crea productos en RentIA y se publicarán automáticamente."
+        ? "Catálogo conectado. Crea productos en SomosKaino y se publicarán automáticamente."
         : "No hay productos activos para sincronizar.",
     })
   }

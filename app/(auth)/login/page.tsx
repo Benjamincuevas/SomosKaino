@@ -40,7 +40,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="bg-white p-8 rounded-2xl shadow-sm border w-full max-w-md">
         <h1 className="text-2xl font-bold text-gray-900 mb-2">Bienvenido de vuelta</h1>
-        <p className="text-gray-500 mb-6 text-sm">Ingresa a tu cuenta de RentIA</p>
+        <p className="text-gray-500 mb-6 text-sm">Ingresa a tu cuenta de SomosKaino</p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div>

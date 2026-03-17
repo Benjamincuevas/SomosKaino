@@ -11,7 +11,7 @@ const config: Config = {
   ],
   theme: {
     extend: {
-      // Aquí agregaremos colores y fuentes personalizadas de RentIA
+      // Aquí agregaremos colores y fuentes personalizadas de SomosKaino
       colors: {
         brand: {
           50:  "#f0fdf4",
