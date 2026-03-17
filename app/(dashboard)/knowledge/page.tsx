@@ -145,7 +145,7 @@ export default async function KnowledgePage() {
           <WhatsappCatalogSource
             catalogId={whatsappConfig?.catalog_id ?? null}
             isConfigured={!!(whatsappConfig?.access_token)}
-            rentiaCount={kainoActive}
+            kainoCount={kainoActive}
           />
         </div>
 
