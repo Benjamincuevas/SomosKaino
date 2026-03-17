@@ -67,7 +67,7 @@ export default function InboxList({ initialConversations, tenantId }: { initialC
     const poll = async () => {
       const { data } = await supabase
         .from("conversations")
-        .select("id, status, ai_paused, updated_at, contacts ( id, name, phone ), messages ( content, direction, sent_by_ai, created_at )")
+        .select("id, status, ai_paused, updated_at, deleted_at, contacts ( id, name, phone ), messages ( content, direction, sent_by_ai, created_at )")
         .eq("tenant_id", tenantId)
         .order("updated_at", { ascending: false })
       if (data) setConversations(data as Conv[])
