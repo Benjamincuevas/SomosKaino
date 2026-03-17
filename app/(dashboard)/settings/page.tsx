@@ -25,7 +25,7 @@ export default async function SettingsPage() {
   const [{ data: whatsappConfig }, { data: aiConfig }] = await Promise.all([
     supabase
       .from("whatsapp_configs")
-      .select("*")
+      .select("id, tenant_id, phone_number_id, phone_display, is_configured, created_at, updated_at")
       .eq("tenant_id", tenant.id)
       .single(),
     supabase

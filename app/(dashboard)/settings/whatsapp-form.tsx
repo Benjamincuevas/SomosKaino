@@ -5,7 +5,7 @@ import type { WhatsappConfig } from "@/types"
 
 export default function WhatsappForm({ config }: { config: WhatsappConfig | null }) {
   const [phoneNumberId, setPhoneNumberId] = useState(config?.phone_number_id ?? "")
-  const [accessToken, setAccessToken]     = useState(config?.access_token ?? "")
+  const [accessToken, setAccessToken]     = useState("")
   const [status, setStatus]   = useState<"idle" | "loading" | "success" | "error">("idle")
   const [errorMsg, setErrorMsg] = useState("")
 
@@ -58,12 +58,15 @@ export default function WhatsappForm({ config }: { config: WhatsappConfig | null
         <div>
           <label className="text-sm font-medium text-gray-700">Access Token</label>
           <p className="text-xs text-gray-400 mb-1">Meta Developer → Tu App → WhatsApp → API Setup → Token</p>
+          {config?.is_configured && (
+            <p className="text-xs text-green-600 mb-1">● Token ya configurado — deja vacío para mantenerlo</p>
+          )}
           <input
-            type="text"
+            type="password"
             value={accessToken}
             onChange={(e) => setAccessToken(e.target.value)}
-            placeholder="EAABsbCS..."
-            required
+            placeholder={config?.is_configured ? "••••••••••••••••" : "EAABsbCS..."}
+            required={!config?.is_configured}
             className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
           />
         </div>

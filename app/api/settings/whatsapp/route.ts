@@ -18,13 +18,18 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const { phone_number_id, access_token } = body
 
+  // Solo actualizar el token si se proporcionó uno nuevo (no vacío)
+  const updatePayload: Record<string, unknown> = {
+    phone_number_id,
+    is_configured: true,
+  }
+  if (access_token?.trim()) {
+    updatePayload.access_token = access_token.trim()
+  }
+
   const { error } = await supabase
     .from("whatsapp_configs")
-    .update({
-      phone_number_id,
-      access_token,
-      is_configured: true,
-    })
+    .update(updatePayload)
     .eq("tenant_id", tenant.id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
