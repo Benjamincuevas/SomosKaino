@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
-import { Search, Trash2 } from "lucide-react"
+import { Search, Trash2, RotateCcw, Trash } from "lucide-react"
 
 type Msg = {
   content: string
@@ -18,11 +18,12 @@ type Conv = {
   status: string
   ai_paused: boolean
   updated_at: string
+  deleted_at: string | null
   contacts: { id: string; name: string | null; phone: string } | { id: string; name: string | null; phone: string }[] | null
   messages: Msg[]
 }
 
-type Filter = "all" | "unread" | "closed"
+type Filter = "all" | "unread" | "closed" | "trash"
 
 const AVATAR_COLORS = [
   "from-blue-500 to-blue-600", "from-violet-500 to-violet-600",
@@ -78,28 +79,60 @@ export default function InboxList({ initialConversations, tenantId }: { initialC
   async function handleDelete(id: string) {
     setDeleting(id)
     const res = await fetch(`/api/conversations/${id}`, { method: "DELETE" })
+    if (res.ok) setConversations((prev) =>
+      prev.map((c) => c.id === id ? { ...c, deleted_at: new Date().toISOString() } : c)
+    )
+    setDeleting(null)
+    setConfirmDelete(null)
+  }
+
+  async function handleRestore(id: string) {
+    setDeleting(id)
+    const res = await fetch(`/api/conversations/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ restore: true }),
+    })
+    if (res.ok) setConversations((prev) =>
+      prev.map((c) => c.id === id ? { ...c, deleted_at: null } : c)
+    )
+    setDeleting(null)
+  }
+
+  async function handleDeletePermanent(id: string) {
+    setDeleting(id)
+    const res = await fetch(`/api/conversations/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ delete_permanent: true }),
+    })
     if (res.ok) setConversations((prev) => prev.filter((c) => c.id !== id))
     setDeleting(null)
     setConfirmDelete(null)
   }
 
-  const unreadCount = conversations.filter((c) => getLastMsg(c)?.direction === "inbound" && c.status === "open").length
+  const trashCount  = conversations.filter((c) => !!c.deleted_at).length
+  const unreadCount = conversations.filter((c) => !c.deleted_at && getLastMsg(c)?.direction === "inbound" && c.status === "open").length
 
   const filtered = conversations.filter((conv) => {
-    const contact = getContact(conv)
-    const name    = (contact?.name ?? contact?.phone ?? "").toLowerCase()
+    const contact     = getContact(conv)
+    const name        = (contact?.name ?? contact?.phone ?? "").toLowerCase()
     const matchSearch = !search || name.includes(search.toLowerCase()) || (contact?.phone ?? "").includes(search)
-    const lastMsg  = getLastMsg(conv)
-    const isUnread = lastMsg?.direction === "inbound" && conv.status === "open"
-    if (filter === "unread") return matchSearch && isUnread
-    if (filter === "closed") return matchSearch && conv.status === "closed"
-    return matchSearch
+    const lastMsg     = getLastMsg(conv)
+    const isUnread    = lastMsg?.direction === "inbound" && conv.status === "open"
+    const isDeleted   = !!conv.deleted_at
+    if (filter === "trash")  return matchSearch && isDeleted
+    if (!matchSearch || isDeleted) return false
+    if (filter === "unread") return isUnread
+    if (filter === "closed") return conv.status === "closed"
+    return true
   })
 
   const filters: [Filter, string][] = [
     ["all",    "Todos"],
     ["unread", `Sin leer${unreadCount > 0 ? ` (${unreadCount})` : ""}`],
     ["closed", "Cerradas"],
+    ["trash",  `Papelera${trashCount > 0 ? ` (${trashCount})` : ""}`],
   ]
 
   return (
@@ -194,26 +227,57 @@ export default function InboxList({ initialConversations, tenantId }: { initialC
                   </div>
                 </Link>
 
-                {/* Botón borrar */}
+                {/* Acciones */}
                 <div className={`absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 transition-opacity ${
                   isConfirming ? "opacity-100" : "opacity-0 group-hover:opacity-100"
                 }`}>
-                  {isConfirming ? (
-                    <>
-                      <button onClick={() => handleDelete(conv.id)} disabled={!!deleting}
-                        className="text-[10px] bg-red-500 text-white px-2 py-1 rounded-lg hover:bg-red-600 disabled:opacity-50">
-                        {deleting === conv.id ? "..." : "Sí"}
-                      </button>
-                      <button onClick={() => setConfirmDelete(null)}
-                        className="text-[10px] bg-slate-700 text-slate-300 px-2 py-1 rounded-lg hover:bg-slate-600">
-                        No
-                      </button>
-                    </>
+                  {conv.deleted_at ? (
+                    // En papelera: restaurar o eliminar permanente
+                    isConfirming ? (
+                      <>
+                        <button onClick={() => handleDeletePermanent(conv.id)} disabled={!!deleting}
+                          className="text-[10px] bg-red-500 text-white px-2 py-1 rounded-lg hover:bg-red-600 disabled:opacity-50">
+                          {deleting === conv.id ? "..." : "Borrar"}
+                        </button>
+                        <button onClick={() => setConfirmDelete(null)}
+                          className="text-[10px] bg-slate-700 text-slate-300 px-2 py-1 rounded-lg hover:bg-slate-600">
+                          No
+                        </button>
+                      </>
+                    ) : (
+                      <div className="flex gap-1">
+                        <button onClick={(e) => { e.preventDefault(); handleRestore(conv.id) }} disabled={!!deleting}
+                          title="Restaurar"
+                          className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-600 hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors">
+                          <RotateCcw size={12} />
+                        </button>
+                        <button onClick={(e) => { e.preventDefault(); setConfirmDelete(conv.id) }}
+                          title="Eliminar permanente"
+                          className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                          <Trash size={12} />
+                        </button>
+                      </div>
+                    )
                   ) : (
-                    <button onClick={(e) => { e.preventDefault(); setConfirmDelete(conv.id) }}
-                      className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors">
-                      <Trash2 size={13} />
-                    </button>
+                    // Chat normal: mover a papelera
+                    isConfirming ? (
+                      <>
+                        <button onClick={() => handleDelete(conv.id)} disabled={!!deleting}
+                          className="text-[10px] bg-red-500 text-white px-2 py-1 rounded-lg hover:bg-red-600 disabled:opacity-50">
+                          {deleting === conv.id ? "..." : "Sí"}
+                        </button>
+                        <button onClick={() => setConfirmDelete(null)}
+                          className="text-[10px] bg-slate-700 text-slate-300 px-2 py-1 rounded-lg hover:bg-slate-600">
+                          No
+                        </button>
+                      </>
+                    ) : (
+                      <button onClick={(e) => { e.preventDefault(); setConfirmDelete(conv.id) }}
+                        title="Mover a papelera"
+                        className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                        <Trash2 size={13} />
+                      </button>
+                    )
                   )}
                 </div>
               </div>

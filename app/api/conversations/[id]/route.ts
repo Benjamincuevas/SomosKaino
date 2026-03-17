@@ -31,10 +31,10 @@ export async function DELETE(
 
   if (!conversation) return NextResponse.json({ error: "No encontrado" }, { status: 404 })
 
-  // Los mensajes se borran en cascada (ON DELETE CASCADE en el schema)
+  // Soft delete — mover a papelera
   const { error } = await supabase
     .from("conversations")
-    .delete()
+    .update({ deleted_at: new Date().toISOString() })
     .eq("id", params.id)
     .eq("tenant_id", tenant.id)
 
@@ -61,7 +61,29 @@ export async function PATCH(
   if (!tenant) return NextResponse.json({ error: "Tenant no encontrado" }, { status: 404 })
 
   const body = await request.json()
-  const { ai_paused } = body
+  const { ai_paused, restore, delete_permanent } = body
+
+  // Restaurar desde papelera
+  if (restore) {
+    const { error } = await supabase
+      .from("conversations")
+      .update({ deleted_at: null })
+      .eq("id", params.id)
+      .eq("tenant_id", tenant.id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ success: true })
+  }
+
+  // Eliminar permanentemente
+  if (delete_permanent) {
+    const { error } = await supabase
+      .from("conversations")
+      .delete()
+      .eq("id", params.id)
+      .eq("tenant_id", tenant.id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ success: true })
+  }
 
   const { error } = await supabase
     .from("conversations")

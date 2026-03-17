@@ -14,7 +14,7 @@ export default async function InboxLayout({ children }: { children: React.ReactN
 
   const { data: conversations } = await supabase
     .from("conversations")
-    .select("id, status, ai_paused, updated_at, contacts ( id, name, phone ), messages ( content, direction, sent_by_ai, created_at )")
+    .select("id, status, ai_paused, updated_at, deleted_at, contacts ( id, name, phone ), messages ( content, direction, sent_by_ai, created_at )")
     .eq("tenant_id", tenant.id)
     .order("updated_at", { ascending: false })
 
