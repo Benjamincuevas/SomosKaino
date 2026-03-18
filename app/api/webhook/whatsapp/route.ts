@@ -355,8 +355,8 @@ async function processWebhookMessage(body: any) {
       content: msg.content,
     }))
 
-  // Fuentes de conocimiento
-  const [sheetResult, kainoResult, docsResult] = await Promise.all([
+  // Fuentes de conocimiento + notas del contacto (incluye origen del anuncio)
+  const [sheetResult, kainoResult, docsResult, contactResult] = await Promise.all([
     catalogConfig?.sheet_id && catalogConfig?.enabled !== false
       ? getPropertyData(catalogConfig.sheet_id, catalogConfig.sheet_gid)
       : Promise.resolve({ text: "", imageMap: {} }),
@@ -370,11 +370,17 @@ async function processWebhookMessage(body: any) {
       .select("name, content")
       .eq("tenant_id", tenantId)
       .eq("enabled", true),
+    supabase
+      .from("contacts")
+      .select("notes")
+      .eq("id", contact.id)
+      .single(),
   ])
 
   const sheetData     = sheetResult
   const kainoProducts = kainoResult.data ?? []
   const knowledgeDocs = docsResult.data ?? []
+  const contactNotes  = contactResult.data?.notes ?? null
 
   const kainoCatalogText = kainoProducts.length > 0
     ? kainoProducts.map(p => {
@@ -404,12 +410,18 @@ async function processWebhookMessage(body: any) {
     ? `${aiConfig.system_prompt}\n\n${knowledgeContext}`
     : aiConfig.system_prompt
 
-  const referralContext = isNewConversation && referral?.headline
-    ? `\n\nCONTEXTO DE ORIGEN: Este cliente llegó haciendo clic en el anuncio "${referral.headline}"${referral.body ? ` ("${referral.body}")` : ""}. IMPORTANTE: si el cliente dice "esto", "eso", "lo del anuncio", "quiero eso" o cualquier expresión vaga, asume que se refiere al producto de ese anuncio. No le preguntes a qué se refiere — respóndele directamente sobre ese producto.`
+  // Contexto del anuncio: en el primer mensaje usamos el referral en tiempo real,
+  // en mensajes siguientes usamos las notas del contacto (donde ya quedó guardado).
+  const adHeadline = referral?.headline
+    ?? contactNotes?.match(/\[Origen: Anuncio "([^"]+)"/)?.[1]
+    ?? null
+
+  const referralContext = adHeadline
+    ? `\n\nCONTEXTO DE ORIGEN: Este cliente llegó haciendo clic en el anuncio "${adHeadline}". IMPORTANTE: si el cliente dice "esto", "eso", "lo del anuncio", "quiero eso" o cualquier expresión vaga, asume que se refiere al producto de ese anuncio. No le preguntes a qué se refiere — respóndele directamente sobre ese producto.`
     : ""
 
   const systemPrompt = history.length > 0
-    ? `${basePrompt}\n\nIMPORTANTE: Ya has interactuado con este cliente antes. NO vuelvas a saludarlo. Continúa la conversación de forma natural.`
+    ? `${basePrompt}${referralContext}\n\nIMPORTANTE: Ya has interactuado con este cliente antes. NO vuelvas a saludarlo. Continúa la conversación de forma natural.`
     : `${basePrompt}${referralContext}`
 
   const sendFallback = async () => {
