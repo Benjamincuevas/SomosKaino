@@ -1,7 +1,6 @@
 "use client"
 
 import { Bell } from "lucide-react"
-import ThemeToggle from "@/components/theme-toggle"
 import { useState, useEffect } from "react"
 
 function getGreeting() {
@@ -45,7 +44,6 @@ export default function Header({ name }: { name: string }) {
           <Bell size={15} strokeWidth={1.75} />
           <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-red-500 rounded-full" />
         </button>
-        <ThemeToggle />
       </div>
     </header>
   )
