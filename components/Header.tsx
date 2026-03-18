@@ -2,6 +2,7 @@
 
 import { Bell } from "lucide-react"
 import { useState, useEffect } from "react"
+import { usePathname } from "next/navigation"
 
 function getGreeting() {
   const h = new Date().getHours()
@@ -20,6 +21,8 @@ function getFormattedDate() {
 export default function Header({ name }: { name: string }) {
   const [greeting, setGreeting]           = useState("")
   const [dateFormatted, setDateFormatted] = useState("")
+  const pathname = usePathname()
+  const inConversation = pathname.startsWith("/inbox/")
 
   useEffect(() => {
     setGreeting(getGreeting())
@@ -27,7 +30,7 @@ export default function Header({ name }: { name: string }) {
   }, [])
 
   return (
-    <header className="h-14 bg-slate-900/70 backdrop-blur-xl border-b border-slate-800/60 flex items-center pl-14 pr-6 md:px-6 gap-4 shrink-0">
+    <header className={`h-14 bg-slate-900/70 backdrop-blur-xl border-b border-slate-800/60 flex items-center gap-4 shrink-0 pr-6 md:px-6 ${inConversation ? "pl-4" : "pl-14"}`}>
 
       {/* Saludo */}
       <div className="flex-1 min-w-0 hidden md:block">

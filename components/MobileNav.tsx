@@ -53,16 +53,21 @@ export default function MobileNav({ tenantName, email }: { tenantName?: string; 
     router.push("/login")
   }
 
+  // En conversaciones el ConversationHeader tiene su propio back button
+  const inConversation = pathname.startsWith("/inbox/")
+
   return (
     <>
       {/* Botón hamburguesa — fijo en la esquina superior izquierda, solo mobile */}
-      <button
-        onClick={() => setOpen(true)}
-        className="md:hidden fixed top-0 left-0 z-50 h-14 w-14 flex items-center justify-center text-slate-400 hover:text-slate-200 transition-colors"
-        aria-label="Abrir menú"
-      >
-        <Menu size={20} strokeWidth={1.75} />
-      </button>
+      {!inConversation && (
+        <button
+          onClick={() => setOpen(true)}
+          className="md:hidden fixed top-0 left-0 z-50 h-14 w-14 flex items-center justify-center text-slate-400 hover:text-slate-200 transition-colors"
+          aria-label="Abrir menú"
+        >
+          <Menu size={20} strokeWidth={1.75} />
+        </button>
+      )}
 
       {/* Overlay */}
       {open && (
