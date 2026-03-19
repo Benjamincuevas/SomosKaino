@@ -640,7 +640,7 @@ export default function InventoryDashboard({
                       placeholder="Nombre de categoría"
                       className="w-full px-3 py-1.5 rounded-lg bg-[#0a1628] border border-[#1f2b49] text-xs text-[#dee5ff] placeholder-[#3a4460] focus:outline-none focus:border-[#FF6D00]/50 transition-all"
                     />
-                    <div className="flex items-center gap-1.5 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
                       {CAT_PRESETS.map(c => (
                         <button
                           key={c}

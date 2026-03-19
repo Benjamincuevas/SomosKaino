@@ -485,11 +485,33 @@ export default function SettingsDashboard({ whatsappConfig, tenantName }: Props)
         <p className="text-sm text-[#a3aac4] mt-0.5">Conecta tu cuenta y personaliza tu perfil</p>
       </div>
 
+      {/* Mobile: horizontal tab row */}
+      <div className="flex lg:hidden gap-1.5 overflow-x-auto pb-2 mb-5" style={{ scrollbarWidth: "none" }}>
+        {TABS.map(tab => {
+          const active = activeTab === tab.id
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl shrink-0 text-xs font-semibold whitespace-nowrap transition-all border ${
+                active
+                  ? "bg-[#FF6D00]/15 text-[#FF6D00] border-[#FF6D00]/30"
+                  : "text-[#a3aac4] border-[#1f2b49] hover:bg-[#0d1a35] hover:text-[#dee5ff]"
+              }`}
+              style={{ background: active ? undefined : "#0a1628" }}
+            >
+              <tab.icon size={13} strokeWidth={active ? 2.25 : 1.75} />
+              {tab.label}
+            </button>
+          )
+        })}
+      </div>
+
       {/* Split view */}
       <div className="flex flex-col lg:flex-row gap-6 items-start">
 
-        {/* ── Left nav ── */}
-        <nav className="w-full lg:w-64 shrink-0 rounded-2xl border border-[#1f2b49] overflow-hidden" style={{ background: "#0a1628" }}>
+        {/* ── Left nav (desktop only) ── */}
+        <nav className="hidden lg:block w-64 shrink-0 rounded-2xl border border-[#1f2b49] overflow-hidden" style={{ background: "#0a1628" }}>
           <div className="px-4 py-3.5 border-b border-[#1f2b49]">
             <p className="text-[10px] font-semibold tracking-widest text-[#3a4460] uppercase">Secciones</p>
           </div>
@@ -525,7 +547,7 @@ export default function SettingsDashboard({ whatsappConfig, tenantName }: Props)
         </nav>
 
         {/* ── Right content ── */}
-        <div className="flex-1 min-w-0 rounded-2xl border border-[#1f2b49] p-6 sm:p-8" style={{ background: "#0a1628" }}>
+        <div className="flex-1 min-w-0 rounded-2xl border border-[#1f2b49] p-5 sm:p-8" style={{ background: "#0a1628" }}>
           {activeTab === "whatsapp" && <WhatsAppSection config={whatsappConfig} />}
           {activeTab === "negocio"  && <NegocioSection  tenantName={tenantName} />}
           {activeTab === "seguridad"   && (
