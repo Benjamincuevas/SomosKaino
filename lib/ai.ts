@@ -47,7 +47,7 @@ FORMATO DE RESPUESTA OBLIGATORIO — responde SIEMPRE con este JSON exacto en un
 
 Reglas:
 - reply: tu mensaje al cliente.
-- product_name: si el cliente pide ver la foto de un producto o estás describiendo uno específico, escribe el nombre exacto del modelo como aparece en los datos (ej: "Samsung Galaxy A07"). Pon null si no aplica. NO pongas URLs ni rutas de archivo.
+- product_name: SOLO si el cliente explícitamente pide ver una foto, imagen o picture de un producto (ej: "¿me puedes mandar una foto?", "¿tiene foto?", "mándame la imagen"), escribe el nombre exacto del modelo como aparece en los datos (ej: "Samsung Galaxy A07"). En cualquier otro caso pon null — NO envíes imagen solo porque estás describiendo un producto. NO pongas URLs ni rutas de archivo.
 - send_location: pon true ÚNICAMENTE si el cliente pregunta por la dirección, ubicación o cómo llegar a la tienda. Pon false en todos los demás casos.
 - handover: pon true en dos situaciones: (1) cuando el cliente responda cuál es su método de pago (ej: "transferencia", "efectivo", "tarjeta", "Cardnet"), o (2) cuando el cliente confirme en firme el pedido después de recibir el resumen o el precio de envío (ej: "sí", "listo", "dale", "confírmalo", "lo quiero"). En cualquiera de esos casos responde SOLO con "Dame un momento ⏳" y pon handover en true. También pon true si el cliente pide hablar con un humano o expresa frustración repetida. Pon false en todos los demás casos.
 - lead_notes: si en este mensaje el cliente reveló información relevante (nombre, producto de interés, presupuesto, zona, urgencia, contexto de compra), escribe un resumen breve en español de máximo 2 oraciones. Si no hay información nueva relevante, pon null.`
