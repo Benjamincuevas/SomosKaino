@@ -152,7 +152,8 @@ export default function MessagesView({ messages: initial, avatarColor, contactIn
                   ) : msg.message_type === "image" ? (() => {
                     const src = msg.content?.startsWith("http")
                       ? msg.content
-                      : `/api/media/${msg.media_id}`
+                      : msg.media_id ? `/api/media/${msg.media_id}` : null
+                    if (!src) return <span className="text-xs opacity-60">📷 Imagen no disponible</span>
                     return (
                       <img
                         src={src}
