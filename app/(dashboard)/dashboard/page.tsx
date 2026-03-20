@@ -46,8 +46,8 @@ export default async function DashboardPage() {
     supabase.from("whatsapp_configs").select("is_configured, phone_display").eq("tenant_id", tenant.id).single(),
     supabase.from("ai_configs").select("enabled").eq("tenant_id", tenant.id).single(),
     supabase.from("conversations")
-      .select("id, status, ai_paused, updated_at, contacts(id, name, phone), messages(content, direction, sent_by_ai, created_at)")
-      .eq("tenant_id", tenant.id).order("updated_at", { ascending: false }).limit(8),
+      .select("id, status, ai_paused, updated_at, contacts(id, name, phone)")
+      .eq("tenant_id", tenant.id).eq("status", "open").order("updated_at", { ascending: false }).limit(8),
     supabase.from("orders").select("*", { count: "exact", head: true }).eq("tenant_id", tenant.id).eq("status", "pending"),
   ])
 

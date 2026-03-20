@@ -75,14 +75,31 @@ export default function ConversationList({
     const supabase = createClient()
 
     const refresh = async () => {
-      const { data } = await supabase
+      const { data: convs } = await supabase
         .from("conversations")
-        .select("id, status, ai_paused, updated_at, contacts ( id, name, phone ), messages ( content, direction, sent_by_ai, created_at )")
+        .select("id, status, ai_paused, updated_at, contacts ( id, name, phone )")
         .eq("tenant_id", tenantId)
         .eq("status", "open")
         .order("updated_at", { ascending: false })
         .limit(8)
-      if (data) setConversations(data as Conv[])
+
+      if (!convs) return
+
+      const ids = convs.map(c => c.id)
+      const { data: msgs } = await supabase
+        .from("messages")
+        .select("conversation_id, content, direction, sent_by_ai, created_at")
+        .in("conversation_id", ids)
+        .order("created_at", { ascending: false })
+        .limit(ids.length * 3)
+
+      const msgsByConv: Record<string, Msg[]> = {}
+      for (const m of msgs ?? []) {
+        if (!msgsByConv[m.conversation_id]) msgsByConv[m.conversation_id] = []
+        msgsByConv[m.conversation_id].push(m)
+      }
+
+      setConversations(convs.map(c => ({ ...c, messages: msgsByConv[c.id] ?? [] })) as Conv[])
     }
 
     const channel = supabase
@@ -91,7 +108,7 @@ export default function ConversationList({
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "conversations" }, refresh)
       .subscribe()
 
-    const interval = setInterval(refresh, 8000)
+    const interval = setInterval(refresh, 30000)
     return () => {
       supabase.removeChannel(channel)
       clearInterval(interval)
