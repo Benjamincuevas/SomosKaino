@@ -8,8 +8,9 @@ import QuickActions     from "@/components/QuickActions"
 
 export default async function DashboardPage() {
   const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect("/login")
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) redirect("/login")
+  const user = session.user
 
   const { data: tenant } = await supabase.from("tenants").select("id, name").eq("owner_id", user.id).single()
   if (!tenant) return <p className="p-6 text-red-500">Error: no se encontró tu cuenta.</p>
@@ -18,6 +19,7 @@ export default async function DashboardPage() {
   const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7)
   const prevWeekStart = new Date(); prevWeekStart.setDate(prevWeekStart.getDate() - 14)
 
+  // Query rápidas sin joins
   const [
     { count: convsToday },
     { count: convsWeek },
@@ -25,8 +27,6 @@ export default async function DashboardPage() {
     { count: leadsToday },
     { count: leadsWeek },
     { count: leadsPrevWeek },
-    { count: aiReplies },
-    { count: aiPrev },
     { data: waConfig },
     { data: aiConfig },
     { data: conversations },
@@ -38,11 +38,6 @@ export default async function DashboardPage() {
     supabase.from("contacts").select("*", { count: "exact", head: true }).eq("tenant_id", tenant.id).gte("created_at", today.toISOString()),
     supabase.from("contacts").select("*", { count: "exact", head: true }).eq("tenant_id", tenant.id).gte("created_at", weekAgo.toISOString()),
     supabase.from("contacts").select("*", { count: "exact", head: true }).eq("tenant_id", tenant.id).gte("created_at", prevWeekStart.toISOString()).lt("created_at", weekAgo.toISOString()),
-    supabase.from("messages").select("*, conversations!inner(tenant_id)", { count: "exact", head: true })
-      .eq("conversations.tenant_id", tenant.id).eq("sent_by_ai", true).eq("direction", "outbound").gte("created_at", weekAgo.toISOString()),
-    supabase.from("messages").select("*, conversations!inner(tenant_id)", { count: "exact", head: true })
-      .eq("conversations.tenant_id", tenant.id).eq("sent_by_ai", true).eq("direction", "outbound")
-      .gte("created_at", prevWeekStart.toISOString()).lt("created_at", weekAgo.toISOString()),
     supabase.from("whatsapp_configs").select("is_configured, phone_display").eq("tenant_id", tenant.id).single(),
     supabase.from("ai_configs").select("enabled").eq("tenant_id", tenant.id).single(),
     supabase.from("conversations")
@@ -52,6 +47,21 @@ export default async function DashboardPage() {
       .order("updated_at", { ascending: false }).limit(5),
     supabase.from("orders").select("*", { count: "exact", head: true }).eq("tenant_id", tenant.id).eq("status", "pending"),
   ])
+
+  // Contar respuestas IA en dos pasos para evitar join pesado en messages
+  const { data: convIds } = await supabase
+    .from("conversations").select("id").eq("tenant_id", tenant.id)
+    .gte("created_at", prevWeekStart.toISOString())
+  const ids = (convIds ?? []).map(c => c.id)
+  const [{ count: aiReplies }, { count: aiPrev }] = ids.length > 0
+    ? await Promise.all([
+        supabase.from("messages").select("*", { count: "exact", head: true })
+          .in("conversation_id", ids).eq("sent_by_ai", true).eq("direction", "outbound").gte("created_at", weekAgo.toISOString()),
+        supabase.from("messages").select("*", { count: "exact", head: true })
+          .in("conversation_id", ids).eq("sent_by_ai", true).eq("direction", "outbound")
+          .gte("created_at", prevWeekStart.toISOString()).lt("created_at", weekAgo.toISOString()),
+      ])
+    : [{ count: 0 }, { count: 0 }]
 
   // Calcular tendencias (evitar división por cero)
   function trend(curr: number, prev: number) {
