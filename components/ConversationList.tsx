@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Bot, ChevronRight, Search } from "lucide-react"
+import { Bot, ChevronRight, Pin, Search } from "lucide-react"
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 
@@ -75,16 +75,16 @@ export default function ConversationList({
     const supabase = createClient()
 
     const refresh = async () => {
-      const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+      const since3days = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
 
       const { data: convs } = await supabase
         .from("conversations")
         .select("id, status, ai_paused, updated_at, contacts ( id, name, phone )")
         .eq("tenant_id", tenantId)
         .eq("status", "open")
-        .gte("updated_at", since24h)
+        .or(`updated_at.gte.${since3days},ai_paused.eq.true`)
         .order("updated_at", { ascending: false })
-        .limit(20)
+        .limit(50)
 
       if (!convs) return
 
@@ -120,15 +120,17 @@ export default function ConversationList({
     }
   }, [tenantId])
 
+  const cutoff = Date.now() - 3 * 24 * 60 * 60 * 1000
   const open = conversations
     .filter((c) => c.status === "open")
+    .filter((c) => c.ai_paused || new Date(c.updated_at).getTime() >= cutoff)
     .filter((c) => {
       if (!query) return true
       const contact = getContact(c)
       const name    = contact?.name ?? contact?.phone ?? ""
       return name.toLowerCase().includes(query.toLowerCase())
     })
-    // Pendientes primero, luego por última actividad
+    // Pendientes de atención humana primero (fijo arriba), luego por última actividad
     .sort((a, b) => {
       if (a.ai_paused !== b.ai_paused) return a.ai_paused ? -1 : 1
       return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
@@ -196,7 +198,11 @@ export default function ConversationList({
                   <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${avatarColor(name)} flex items-center justify-center shadow-md`}>
                     <span className="text-sm font-bold text-white">{initials}</span>
                   </div>
-                  {!conv.ai_paused && (
+                  {conv.ai_paused ? (
+                    <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-[#b36dff] border-2 border-[#0a1628] rounded-full flex items-center justify-center">
+                      <Pin size={8} className="text-white" fill="white" />
+                    </span>
+                  ) : (
                     <span className="absolute bottom-0.5 right-0.5 w-2.5 h-2.5 bg-[#FF6D00] border-2 border-[#0a1628] rounded-full" />
                   )}
                 </div>
