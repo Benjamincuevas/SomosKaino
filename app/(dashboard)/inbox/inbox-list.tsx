@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
-import { Search, Trash2, RotateCcw, Trash } from "lucide-react"
+import { Pin, Search, Trash2, RotateCcw, Trash } from "lucide-react"
 
 type Msg = {
   content: string
@@ -128,22 +128,32 @@ export default function InboxList({ initialConversations, tenantId }: { initialC
     setConfirmDelete(null)
   }
 
+  const cutoff3days = Date.now() - 3 * 24 * 60 * 60 * 1000
+
   const trashCount  = conversations.filter((c) => !!c.deleted_at).length
   const unreadCount = conversations.filter((c) => !c.deleted_at && getLastMsg(c)?.direction === "inbound" && c.status === "open").length
 
-  const filtered = conversations.filter((conv) => {
-    const contact     = getContact(conv)
-    const name        = (contact?.name ?? contact?.phone ?? "").toLowerCase()
-    const matchSearch = !search || name.includes(search.toLowerCase()) || (contact?.phone ?? "").includes(search)
-    const lastMsg     = getLastMsg(conv)
-    const isUnread    = lastMsg?.direction === "inbound" && conv.status === "open"
-    const isDeleted   = !!conv.deleted_at
-    if (filter === "trash")  return matchSearch && isDeleted
-    if (!matchSearch || isDeleted) return false
-    if (filter === "unread") return isUnread
-    if (filter === "closed") return conv.status === "closed"
-    return true
-  })
+  const filtered = conversations
+    .filter((conv) => {
+      const contact     = getContact(conv)
+      const name        = (contact?.name ?? contact?.phone ?? "").toLowerCase()
+      const matchSearch = !search || name.includes(search.toLowerCase()) || (contact?.phone ?? "").includes(search)
+      const lastMsg     = getLastMsg(conv)
+      const isUnread    = lastMsg?.direction === "inbound" && conv.status === "open"
+      const isDeleted   = !!conv.deleted_at
+      if (filter === "trash")  return matchSearch && isDeleted
+      if (!matchSearch || isDeleted) return false
+      // Ocultar inactivos +3 días salvo que estén pendientes de atención humana
+      if (filter === "all" && !conv.ai_paused && new Date(conv.updated_at).getTime() < cutoff3days) return false
+      if (filter === "unread") return isUnread
+      if (filter === "closed") return conv.status === "closed"
+      return true
+    })
+    .sort((a, b) => {
+      // Pendientes de humano siempre primero
+      if (a.ai_paused !== b.ai_paused) return a.ai_paused ? -1 : 1
+      return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+    })
 
   const filters: [Filter, string][] = [
     ["all",    "Todos"],
@@ -220,9 +230,13 @@ export default function InboxList({ initialConversations, tenantId }: { initialC
                     <div className={`w-11 h-11 rounded-full bg-gradient-to-br ${avatarColor(displayName)} flex items-center justify-center shadow-sm`}>
                       <span className="text-sm font-bold text-white">{initials}</span>
                     </div>
-                    <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-slate-900 ${
-                      conv.ai_paused ? "bg-amber-400" : "bg-green-400"
-                    }`} />
+                    {conv.ai_paused ? (
+                      <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-violet-500 border-2 border-slate-900 rounded-full flex items-center justify-center">
+                        <Pin size={8} className="text-white" fill="white" />
+                      </span>
+                    ) : (
+                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-slate-900 bg-green-400" />
+                    )}
                   </div>
 
                   {/* Info */}
