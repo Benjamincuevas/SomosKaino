@@ -549,7 +549,7 @@ async function processWebhookMessage(body: any) {
     const templateParams = [
       clientName,
       from,
-      leadNotes ? `Detalle: ${leadNotes}` : "Sin detalles adicionales",
+      productName ? `El cliente está solicitando: ${productName}` : leadNotes ? `Detalle: ${leadNotes}` : "Sin detalles adicionales",
     ]
     const fallbackText = `🛒 *Pedido confirmado*\n\nCliente: *${clientName}*\nTeléfono: ${from}${orderDetail}\n\n👉 Coordina el pago y la entrega.`
 
@@ -650,6 +650,69 @@ async function processWebhookMessage(body: any) {
         console.log(`🖼️ Imagen de "${productName}" enviada a ${from}`)
       } catch (err) {
         console.error(`❌ Error enviando imagen de "${productName}":`, err)
+      }
+    } else {
+      // Foto no disponible: activar handover y notificar a los asesores
+      console.log(`⚠️ Foto de "${productName}" no disponible — activando handover y notificando asesores`)
+
+      await supabase.from("conversations").update({ ai_paused: true }).eq("id", conversationId)
+
+      // Avisar al cliente que espere
+      const waitMsg = "Dame un momento ⏳ Voy a buscar esa foto para ti."
+      try {
+        const sentWait = await sendWhatsAppMessage({
+          to:            from,
+          message:       waitMsg,
+          phoneNumberId: whatsappConfig.phone_number_id!,
+          accessToken:   whatsappConfig.access_token!,
+        })
+        await supabase.from("messages").insert({
+          conversation_id:     conversationId,
+          content:             waitMsg,
+          direction:           "outbound",
+          sent_by_ai:          true,
+          whatsapp_message_id: sentWait?.messages?.[0]?.id ?? null,
+        })
+      } catch (err) {
+        console.error("❌ Error enviando mensaje de espera al cliente:", err)
+      }
+
+      // Limpiar replies del AI para no enviar texto confuso sobre la foto
+      replies = []
+
+      // Notificar a los asesores autorizados
+      const { data: contactInfoForPhoto } = await supabase
+        .from("contacts").select("name, phone").eq("id", contact.id).single()
+      const clientNameForPhoto = contactInfoForPhoto?.name ?? contactInfoForPhoto?.phone ?? from
+
+      const ALERT_NUMBERS  = ["18094173098", "18292856400"]
+      const templateParams = [clientNameForPhoto, from, `El cliente quiere la foto del producto: ${productName}`]
+      const fallbackText   = `📸 *Foto solicitada*\n\nCliente: *${clientNameForPhoto}*\nTeléfono: ${from}\n\nEl cliente quiere la foto del producto: ${productName}\n\n👉 Envía la foto directamente al cliente.`
+
+      for (const num of ALERT_NUMBERS) {
+        try {
+          await sendWhatsAppTemplate({
+            to:            num,
+            templateName:  "confirmacin_de_pedido",
+            parameters:    templateParams,
+            phoneNumberId: whatsappConfig.phone_number_id!,
+            accessToken:   whatsappConfig.access_token!,
+          })
+          console.log(`📲 Solicitud de foto (template) enviada a ${num}`)
+        } catch (templateErr: any) {
+          console.error(`❌ Template falló para ${num}:`, templateErr?.message ?? templateErr)
+          try {
+            await sendWhatsAppMessage({
+              to:            num,
+              message:       fallbackText,
+              phoneNumberId: whatsappConfig.phone_number_id!,
+              accessToken:   whatsappConfig.access_token!,
+            })
+            console.log(`📲 Solicitud de foto (texto fallback) enviada a ${num}`)
+          } catch (textErr: any) {
+            console.error(`❌ Fallback texto también falló para ${num}:`, textErr?.message ?? textErr)
+          }
+        }
       }
     }
   }
