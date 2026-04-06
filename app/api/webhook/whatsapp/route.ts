@@ -184,6 +184,22 @@ async function processWebhookMessage(body: any) {
 
   if (!textForAI) return
 
+  // ── Reply/cita: si el usuario respondió a un mensaje específico, incluir el contexto ──
+  const quotedMsgId = message.context?.id ?? null
+  if (quotedMsgId) {
+    const { data: quotedMsg } = await supabase
+      .from("messages")
+      .select("content, direction")
+      .eq("whatsapp_message_id", quotedMsgId)
+      .maybeSingle()
+
+    if (quotedMsg?.content) {
+      const who = quotedMsg.direction === "outbound" ? "el asistente" : "el cliente"
+      textForAI = `[El cliente está respondiendo al mensaje de ${who}: "${quotedMsg.content}"]\n${textForAI}`
+      console.log(`💬 Reply detectado — mensaje citado (${who}): "${quotedMsg.content.substring(0, 80)}"`)
+    }
+  }
+
   // ── Contacto (upsert con opt-in) ─────────────────────────────────────────
   const optInSource = referral?.source_id ? "ctwa_ad" : "direct_message"
   const { data: contact } = await supabase
