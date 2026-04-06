@@ -7,7 +7,7 @@ import { waitUntil } from "@vercel/functions"
 import { createClient } from "@supabase/supabase-js"
 import { generateReply, transcribeAudio, describeImage } from "@/lib/ai"
 import { sendWhatsAppMessage, sendWhatsAppMedia, sendWhatsAppLocation, sendWhatsAppImageByUrl, uploadMedia, markAsRead, downloadMedia, sendWhatsAppTemplate } from "@/lib/whatsapp"
-import { getPropertyData, findImageUrl } from "@/lib/sheets"
+import { findImageUrl } from "@/lib/sheets"
 import { validateWebhookSignature } from "@/lib/whatsapp-utils"
 
 // Deduplicación en memoria — evita reprocesar si Meta reenvía el webhook
@@ -140,12 +140,6 @@ async function processWebhookMessage(body: any) {
   const storeAddress = tenantData?.store_address || process.env.STORE_ADDRESS || ""
   const storeLat     = tenantData?.store_latitude  ? Number(tenantData.store_latitude)  : parseFloat(process.env.STORE_LATITUDE  ?? "0")
   const storeLng     = tenantData?.store_longitude ? Number(tenantData.store_longitude) : parseFloat(process.env.STORE_LONGITUDE ?? "0")
-
-  const { data: catalogConfig } = await supabase
-    .from("catalog_configs")
-    .select("sheet_id, sheet_gid, enabled")
-    .eq("tenant_id", tenantId)
-    .maybeSingle()
 
   // ── Procesar contenido del mensaje ───────────────────────────────────────
   let textForAI   = message.text?.body ?? ""
@@ -343,7 +337,7 @@ async function processWebhookMessage(body: any) {
   // ── Respuesta automática con IA ───────────────────────────────────────────
   const { data: aiConfig } = await supabase
     .from("ai_configs")
-    .select("enabled, system_prompt")
+    .select("enabled, system_prompt, alert_numbers, greeting_message, handover_template")
     .eq("tenant_id", tenantId)
     .single()
 
@@ -368,10 +362,7 @@ async function processWebhookMessage(body: any) {
     }))
 
   // Fuentes de conocimiento + notas del contacto (incluye origen del anuncio)
-  const [sheetResult, kainoResult, docsResult, contactResult] = await Promise.all([
-    catalogConfig?.sheet_id && catalogConfig?.enabled !== false
-      ? getPropertyData(catalogConfig.sheet_id, catalogConfig.sheet_gid)
-      : Promise.resolve({ text: "", imageMap: {} }),
+  const [inventoryResult, docsResult, contactResult] = await Promise.all([
     supabase
       .from("catalog_products")
       .select("name, description, price, currency, image_url")
@@ -389,13 +380,12 @@ async function processWebhookMessage(body: any) {
       .single(),
   ])
 
-  const sheetData     = sheetResult
-  const kainoProducts = kainoResult.data ?? []
-  const knowledgeDocs = docsResult.data ?? []
-  const contactNotes  = contactResult.data?.notes ?? null
+  const inventoryProducts = inventoryResult.data ?? []
+  const knowledgeDocs     = docsResult.data ?? []
+  const contactNotes      = contactResult.data?.notes ?? null
 
-  const kainoCatalogText = kainoProducts.length > 0
-    ? kainoProducts.map(p => {
+  const inventoryText = inventoryProducts.length > 0
+    ? inventoryProducts.map(p => {
         const price = p.price != null ? ` — ${p.currency} ${p.price}` : ""
         const desc  = p.description ? ` — ${p.description}` : ""
         const foto  = p.image_url ? " [tiene foto disponible]" : ""
@@ -403,9 +393,9 @@ async function processWebhookMessage(body: any) {
       }).join("\n")
     : ""
 
-  const kainoCatalogImageMap: Record<string, string> = {}
-  for (const p of kainoProducts) {
-    if (p.image_url) kainoCatalogImageMap[p.name.toLowerCase()] = p.image_url
+  const inventoryImageMap: Record<string, string> = {}
+  for (const p of inventoryProducts) {
+    if (p.image_url) inventoryImageMap[p.name.toLowerCase()] = p.image_url
   }
 
   const docsText = knowledgeDocs
@@ -413,18 +403,19 @@ async function processWebhookMessage(body: any) {
     .join("\n\n")
 
   const knowledgeParts: string[] = []
-  if (kainoCatalogText) knowledgeParts.push(`## Catálogo de productos:\n${kainoCatalogText}`)
-  if (sheetData.text)   knowledgeParts.push(`## Inventario (Spreadsheet):\n${sheetData.text}`)
-  if (docsText)         knowledgeParts.push(docsText)
+  if (inventoryText) knowledgeParts.push(`## Inventario:\n${inventoryText}`)
+  if (docsText)      knowledgeParts.push(docsText)
 
   const knowledgeContext = knowledgeParts.join("\n\n")
   const basePrompt = knowledgeContext
     ? `${aiConfig.system_prompt}\n\n${knowledgeContext}`
     : aiConfig.system_prompt
 
-  // Contexto del anuncio: usamos headline + body para identificar el producto.
-  // El body suele tener el nombre del producto cuando el headline es genérico (ej: nombre de la tienda).
+  // Contexto del anuncio: usamos body (producto específico) o headline como fallback.
+  // En conversaciones subsecuentes extraemos primero el campo Producto de las notas,
+  // luego el headline como último recurso.
   const adHeadline = (referral?.body || referral?.headline)
+    ?? contactNotes?.match(/Producto: "([^"]+)"/)?.[1]
     ?? contactNotes?.match(/\[Origen: Anuncio "([^"]+)"/)?.[1]
     ?? null
 
@@ -442,13 +433,43 @@ async function processWebhookMessage(body: any) {
     : contactNotes?.match(/\[Origen: Anuncio "[^"]+" vía ([^\s(]+)/)?.[1]
     ?? "Meta Ads"
 
-  // Buscar el producto del anuncio en el catálogo para dar contexto completo al AI
-  const adProduct = adHeadline
-    ? kainoProducts.find(p =>
-        p.name.toLowerCase().includes(adHeadline.toLowerCase()) ||
-        adHeadline.toLowerCase().includes(p.name.toLowerCase())
-      )
-    : null
+  // Matching por palabras clave entre el texto del anuncio y los nombres del inventario.
+  // Normaliza, extrae palabras significativas (>2 chars) y elige el producto con
+  // mayor porcentaje de palabras del nombre que aparecen en el texto del anuncio.
+  function matchAdProduct(adText: string, products: typeof inventoryProducts) {
+    const normalize = (s: string) =>
+      s.toLowerCase()
+       .normalize("NFD").replace(/[\u0300-\u036f]/g, "")  // quitar tildes
+       .replace(/[^a-z0-9\s]/g, " ")
+       .replace(/\s+/g, " ")
+       .trim()
+
+    const adNorm  = normalize(adText)
+    const adWords = new Set(adNorm.split(" ").filter(w => w.length > 2))
+
+    let bestProduct = null
+    let bestScore   = 0
+
+    for (const p of products) {
+      const nameNorm  = normalize(p.name)
+      const nameWords = nameNorm.split(" ").filter(w => w.length > 2)
+      if (nameWords.length === 0) continue
+
+      // Cuántas palabras del nombre del producto aparecen en el texto del anuncio
+      const matches = nameWords.filter(w => adWords.has(w) || adNorm.includes(w)).length
+      const score   = matches / nameWords.length
+
+      if (score > bestScore) {
+        bestScore   = score
+        bestProduct = p
+      }
+    }
+
+    // Umbral: al menos el 50% de las palabras del nombre deben coincidir
+    return bestScore >= 0.5 ? bestProduct : null
+  }
+
+  const adProduct = adHeadline ? matchAdProduct(adHeadline, inventoryProducts) : null
 
   const adProductInfo = adProduct
     ? `Detalles del producto: ${adProduct.name}${adProduct.description ? ` — ${adProduct.description}` : ""}${adProduct.price != null ? ` — Precio: ${adProduct.currency} ${adProduct.price}` : ""}${adProduct.image_url ? " [tiene foto disponible]" : ""}.`
@@ -457,7 +478,7 @@ async function processWebhookMessage(body: any) {
   const referralContext = adHeadline
     ? adProduct
       ? `\n\nCONTEXTO CRÍTICO — ANUNCIO DE PAGO: Este cliente llegó desde un anuncio de ${adPlatform} sobre "${adHeadline}". ${adProductInfo} REGLAS ESTRICTAS: (1) NUNCA saludes — el saludo ya fue enviado automáticamente, NO digas Hola ni Saludos. (2) NUNCA preguntes a qué producto se refiere — ya lo sabes. (3) ${isNewConversation ? `Tu primer mensaje debe confirmar directamente que SÍ tenemos el producto y preguntar cuántas unidades quiere. Ej: "Sí, tenemos el ${adProduct!.name} a ${adProduct!.currency} ${adProduct!.price}. ¿Cuántas unidades necesitas?"` : `Continúa la conversación sobre "${adHeadline}" de forma breve.`} (4) Si preguntan precio/detalles/stock sin especificar producto, siempre es sobre "${adHeadline}". (5) NUNCA listes especificaciones técnicas a menos que las pidan.`
-      : `\n\nCONTEXTO CRÍTICO — ANUNCIO DE PAGO: Este cliente llegó desde un anuncio de ${adPlatform} sobre "${adHeadline}". REGLAS ESTRICTAS: (1) NUNCA saludes — el saludo ya fue enviado automáticamente, NO digas Hola ni Saludos. (2) ${isNewConversation ? "Tu primer mensaje debe preguntarle al cliente a qué producto se refiere, ya que no encontramos el producto exacto del anuncio en nuestro catálogo. Ej: \"¿Podrías indicarme a cuál producto te refieres?\"" : `Continúa la conversación sobre el anuncio de forma breve.`}`
+      : `\n\nCONTEXTO CRÍTICO — ANUNCIO DE PAGO: Este cliente llegó desde un anuncio de ${adPlatform} cuyo texto es: "${adHeadline}". REGLAS ESTRICTAS: (1) NUNCA saludes — el saludo ya fue enviado automáticamente. (2) Busca en el inventario si hay algún producto cuyo nombre esté mencionado o se pueda inferir del texto "${adHeadline}". (3) ${isNewConversation ? `Si encuentras un producto relacionado, responde directamente sobre él con precio y disponibilidad. Si después de revisar el inventario definitivamente no existe ningún producto relacionado, entonces sí pregunta al cliente cuál producto específico busca — con UNA sola pregunta breve.` : `Continúa la conversación intentando resolver la duda del cliente sobre el producto del anuncio.`} (4) NUNCA listes especificaciones técnicas a menos que las pidan.`
     : ""
 
   const companyContext = companyName
@@ -488,7 +509,8 @@ async function processWebhookMessage(body: any) {
   // Generar respuesta con Gemini
   // Enviar saludo fijo en conversaciones nuevas
   if (isNewConversation) {
-    const greeting = `Saludos, te comunicas con la tienda ${companyName ?? "Techjol"} 👋`
+    const greeting = aiConfig?.greeting_message
+      ?? `Saludos, te comunicas con la tienda ${companyName} 👋`
     try {
       const sentGreeting = await sendWhatsAppMessage({
         to: from, message: greeting,
@@ -548,7 +570,7 @@ async function processWebhookMessage(body: any) {
     const orderDetail = leadNotes ? `\n\n📋 *Detalle:* ${leadNotes}` : ""
     const alertMsg    = `🛒 *Pedido confirmado*\n\nCliente: *${clientName}*\nTeléfono: ${from}${orderDetail}\n\n👉 Coordina el pago y la entrega.`
 
-    const ALERT_NUMBERS  = ["18094173098", "18292856400"]
+    const ALERT_NUMBERS  = aiConfig?.alert_numbers?.length ? aiConfig.alert_numbers : []
     const templateParams = [
       clientName,
       from,
@@ -560,7 +582,7 @@ async function processWebhookMessage(body: any) {
       try {
         await sendWhatsAppTemplate({
           to:            num,
-          templateName:  "confirmacin_de_pedido",
+          templateName:  aiConfig?.handover_template ?? "confirmacin_de_pedido",
           parameters:    templateParams,
           phoneNumberId: whatsappConfig.phone_number_id!,
           accessToken:   whatsappConfig.access_token!,
@@ -632,9 +654,7 @@ async function processWebhookMessage(body: any) {
 
   // Enviar imagen del producto si el AI lo indicó
   if (productName) {
-    const imageUrl =
-      findImageUrl(productName, kainoCatalogImageMap) ??
-      findImageUrl(productName, sheetData.imageMap)
+    const imageUrl = findImageUrl(productName, inventoryImageMap)
     if (imageUrl) {
       try {
         await sendWhatsAppImageByUrl({
@@ -688,7 +708,7 @@ async function processWebhookMessage(body: any) {
         .from("contacts").select("name, phone").eq("id", contact.id).single()
       const clientNameForPhoto = contactInfoForPhoto?.name ?? contactInfoForPhoto?.phone ?? from
 
-      const ALERT_NUMBERS  = ["18094173098", "18292856400"]
+      const ALERT_NUMBERS  = aiConfig?.alert_numbers?.length ? aiConfig.alert_numbers : []
       const templateParams = [clientNameForPhoto, from, `El cliente quiere la foto del producto: ${productName}`]
       const fallbackText   = `📸 *Foto solicitada*\n\nCliente: *${clientNameForPhoto}*\nTeléfono: ${from}\n\nEl cliente quiere la foto del producto: ${productName}\n\n👉 Envía la foto directamente al cliente.`
 
@@ -696,7 +716,7 @@ async function processWebhookMessage(body: any) {
         try {
           await sendWhatsAppTemplate({
             to:            num,
-            templateName:  "confirmacin_de_pedido",
+            templateName:  aiConfig?.handover_template ?? "confirmacin_de_pedido",
             parameters:    templateParams,
             phoneNumberId: whatsappConfig.phone_number_id!,
             accessToken:   whatsappConfig.access_token!,

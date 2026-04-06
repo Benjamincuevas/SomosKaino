@@ -31,6 +31,9 @@ export type AiConfig = {
   enabled: boolean
   system_prompt: string
   model: string                    // "gemini-1.5-flash", "gemini-1.5-pro", etc.
+  alert_numbers: string[]          // teléfonos que reciben alerta en handover
+  greeting_message: string | null  // mensaje de bienvenida en conversaciones nuevas
+  handover_template: string | null // nombre del template de WhatsApp para handover
   created_at: string
   updated_at: string
 }

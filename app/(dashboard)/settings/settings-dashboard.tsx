@@ -5,17 +5,19 @@ import {
   MessageSquare, Store, Shield, CreditCard,
   CheckCircle2, Eye, EyeOff, Phone, Globe,
   Lock, AlertCircle, ChevronRight, RefreshCw,
-  ShieldCheck, Star, ExternalLink, Copy, Check,
+  ShieldCheck, Star, ExternalLink, Copy, Check, Bot,
 } from "lucide-react"
-import type { WhatsappConfig } from "@/types"
+import type { WhatsappConfig, AiConfig } from "@/types"
+import AiForm from "./ai-form"
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-type Tab = "whatsapp" | "negocio" | "seguridad" | "facturacion"
+type Tab = "whatsapp" | "negocio" | "ia" | "seguridad" | "facturacion"
 
 type Props = {
   whatsappConfig: WhatsappConfig | null
   tenantName:     string
+  aiConfig:       AiConfig | null
 }
 
 // ── Shared styles ──────────────────────────────────────────────────────────────
@@ -30,6 +32,7 @@ const labelCls = "text-[11px] font-semibold uppercase tracking-widest text-[#a3a
 const TABS: { id: Tab; label: string; icon: React.ElementType; desc: string }[] = [
   { id: "whatsapp",    label: "WhatsApp API",      icon: MessageSquare, desc: "Credenciales Meta" },
   { id: "negocio",     label: "Datos del Negocio", icon: Store,         desc: "Perfil de empresa" },
+  { id: "ia",          label: "Asistente IA",       icon: Bot,           desc: "Comportamiento del bot" },
   { id: "seguridad",   label: "Seguridad",          icon: Shield,        desc: "Acceso y contraseña" },
   { id: "facturacion", label: "Facturación",         icon: CreditCard,    desc: "Plan y pagos" },
 ]
@@ -469,7 +472,7 @@ function ComingSoonSection({ icon: Icon, title, desc }: { icon: React.ElementTyp
 
 // ── Main Dashboard ─────────────────────────────────────────────────────────────
 
-export default function SettingsDashboard({ whatsappConfig, tenantName }: Props) {
+export default function SettingsDashboard({ whatsappConfig, tenantName, aiConfig }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("whatsapp")
 
   return (
@@ -548,8 +551,9 @@ export default function SettingsDashboard({ whatsappConfig, tenantName }: Props)
 
         {/* ── Right content ── */}
         <div className="flex-1 min-w-0 rounded-2xl border border-[#1f2b49] p-5 sm:p-8" style={{ background: "#0a1628" }}>
-          {activeTab === "whatsapp" && <WhatsAppSection config={whatsappConfig} />}
-          {activeTab === "negocio"  && <NegocioSection  tenantName={tenantName} />}
+          {activeTab === "whatsapp"    && <WhatsAppSection config={whatsappConfig} />}
+          {activeTab === "negocio"     && <NegocioSection  tenantName={tenantName} />}
+          {activeTab === "ia"          && <AiForm config={aiConfig} />}
           {activeTab === "seguridad"   && (
             <ComingSoonSection icon={Shield}     title="Seguridad" desc="Gestión de contraseña y autenticación de dos factores" />
           )}
