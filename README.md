@@ -62,8 +62,8 @@ SomosKaino es un SaaS que permite a negocios automatizar sus ventas por WhatsApp
 
 1. **Clona el repositorio**
    ```bash
-   git clone https://github.com/KainWH/rentia.git
-   cd rentia
+   git clone https://github.com/Benjamincuevas/SomosKaino.git
+   cd SomosKaino
    ```
 
 2. **Instala dependencias**
@@ -109,7 +109,7 @@ SomosKaino es un SaaS que permite a negocios automatizar sus ventas por WhatsApp
 ## 📁 Estructura del Proyecto
 
 ```
-rentia/
+SomosKaino/
 ├── app/                    # App Router de Next.js
 │   ├── (auth)/            # Rutas de autenticación
 │   ├── (dashboard)/       # Panel principal
