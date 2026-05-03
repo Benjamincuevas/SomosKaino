@@ -7,7 +7,8 @@ import { waitUntil } from "@vercel/functions"
 import { createClient } from "@supabase/supabase-js"
 import { generateReply, transcribeAudio, describeImage } from "@/lib/ai"
 import { sendWhatsAppMessage, sendWhatsAppMedia, sendWhatsAppLocation, sendWhatsAppImageByUrl, uploadMedia, markAsRead, downloadMedia, sendWhatsAppTemplate } from "@/lib/whatsapp"
-import { findImageUrl } from "@/lib/sheets"
+import { findImageUrl, getPropertyData } from "@/lib/sheets"
+import { fetchCatalogProducts } from "@/lib/whatsapp-catalog"
 import { validateWebhookSignature } from "@/lib/whatsapp-utils"
 
 // Deduplicación en memoria — evita reprocesar si Meta reenvía el webhook
@@ -119,7 +120,7 @@ async function processWebhookMessage(body: any) {
   // ── Tenant ───────────────────────────────────────────────────────────────
   const { data: whatsappConfig } = await supabase
     .from("whatsapp_configs")
-    .select("tenant_id, access_token, phone_number_id")
+    .select("tenant_id, access_token, phone_number_id, catalog_id")
     .eq("phone_number_id", phoneNumberId)
     .single()
 
@@ -378,7 +379,7 @@ async function processWebhookMessage(body: any) {
     }))
 
   // Fuentes de conocimiento + notas del contacto (incluye origen del anuncio)
-  const [inventoryResult, docsResult, contactResult] = await Promise.all([
+  const [inventoryResult, docsResult, contactResult, catalogConfigResult] = await Promise.all([
     supabase
       .from("catalog_products")
       .select("name, description, price, currency, image_url")
@@ -394,12 +395,24 @@ async function processWebhookMessage(body: any) {
       .select("notes")
       .eq("id", contact.id)
       .single(),
+    supabase
+      .from("catalog_configs")
+      .select("sheet_id, sheet_gid, enabled")
+      .eq("tenant_id", tenantId)
+      .maybeSingle(),
   ])
 
   const inventoryProducts = inventoryResult.data ?? []
   const knowledgeDocs     = docsResult.data ?? []
   const contactNotes      = contactResult.data?.notes ?? null
+  const catalogConfig     = catalogConfigResult.data
 
+  const inventoryImageMap: Record<string, string> = {}
+  for (const p of inventoryProducts) {
+    if (p.image_url) inventoryImageMap[p.name.toLowerCase()] = p.image_url
+  }
+
+  // Catálogo SomosKaino (tabla catalog_products)
   const inventoryText = inventoryProducts.length > 0
     ? inventoryProducts.map(p => {
         const price = p.price != null ? ` — ${p.currency} ${p.price}` : ""
@@ -409,9 +422,81 @@ async function processWebhookMessage(body: any) {
       }).join("\n")
     : ""
 
-  const inventoryImageMap: Record<string, string> = {}
+  // Catálogo de Google Sheets — se carga en paralelo con Meta
+  const sheetPromise = catalogConfig?.sheet_id && catalogConfig?.enabled !== false
+    ? getPropertyData(catalogConfig.sheet_id, catalogConfig.sheet_gid)
+    : Promise.resolve({ text: "", imageMap: {} as Record<string, string>, products: [] as Awaited<ReturnType<typeof getPropertyData>>["products"] })
+
+  // Catálogo de WhatsApp Business (Meta Commerce Manager)
+  const metaPromise = whatsappConfig.catalog_id && whatsappConfig.access_token
+    ? fetchCatalogProducts(whatsappConfig.catalog_id, whatsappConfig.access_token)
+    : Promise.resolve({ products: [] })
+
+  const [sheetData, metaResult] = await Promise.all([sheetPromise, metaPromise])
+
+  // Fusionar imageMap (catalog_products tiene prioridad sobre Sheet sobre Meta)
+  for (const [name, url] of Object.entries(sheetData.imageMap)) {
+    if (!inventoryImageMap[name]) inventoryImageMap[name] = url
+  }
+  for (const p of metaResult.products) {
+    if (p.image_url && !inventoryImageMap[p.name.toLowerCase()]) {
+      inventoryImageMap[p.name.toLowerCase()] = p.image_url
+    }
+  }
+
+  // Texto del catálogo de Meta — precio en Meta viene en centavos
+  const metaText = metaResult.products.length > 0
+    ? metaResult.products.map(p => {
+        const price = p.price != null
+          ? ` — ${p.currency ?? ""} ${(p.price / 100).toFixed(2)}`.trim()
+          : ""
+        const desc  = p.description ? ` — ${p.description}` : ""
+        const foto  = p.image_url ? " [tiene foto disponible]" : ""
+        return `• ${p.name}${desc}${price}${foto}`
+      }).join("\n")
+    : ""
+
+  // Lista unificada para matching de anuncios — catalog_products tiene prioridad,
+  // luego Sheet, luego Meta. Dedupe por nombre en minúsculas.
+  type UnifiedProduct = {
+    name:        string
+    description: string | null
+    price:       number | null
+    currency:    string | null
+    image_url:   string | null
+  }
+  const allProducts: UnifiedProduct[] = []
+  const seenNames = new Set<string>()
   for (const p of inventoryProducts) {
-    if (p.image_url) inventoryImageMap[p.name.toLowerCase()] = p.image_url
+    const key = p.name.toLowerCase()
+    if (seenNames.has(key)) continue
+    seenNames.add(key)
+    allProducts.push({
+      name:        p.name,
+      description: p.description ?? null,
+      price:       p.price ?? null,
+      currency:    p.currency ?? null,
+      image_url:   p.image_url ?? null,
+    })
+  }
+  for (const p of sheetData.products) {
+    const key = p.name.toLowerCase()
+    if (seenNames.has(key)) continue
+    seenNames.add(key)
+    allProducts.push(p)
+  }
+  for (const p of metaResult.products) {
+    const key = p.name.toLowerCase()
+    if (seenNames.has(key)) continue
+    seenNames.add(key)
+    allProducts.push({
+      name:        p.name,
+      description: p.description ?? null,
+      // Meta entrega precio en centavos — normalizar a unidades estándar
+      price:       p.price != null ? p.price / 100 : null,
+      currency:    p.currency ?? null,
+      image_url:   p.image_url ?? null,
+    })
   }
 
   const docsText = knowledgeDocs
@@ -419,8 +504,10 @@ async function processWebhookMessage(body: any) {
     .join("\n\n")
 
   const knowledgeParts: string[] = []
-  if (inventoryText) knowledgeParts.push(`## Inventario:\n${inventoryText}`)
-  if (docsText)      knowledgeParts.push(docsText)
+  if (inventoryText)    knowledgeParts.push(`## Catálogo SomosKaino:\n${inventoryText}`)
+  if (sheetData.text)   knowledgeParts.push(`## Catálogo Google Sheets:\n${sheetData.text}`)
+  if (metaText)         knowledgeParts.push(`## Catálogo WhatsApp Business:\n${metaText}`)
+  if (docsText)         knowledgeParts.push(docsText)
 
   const knowledgeContext = knowledgeParts.join("\n\n")
   const basePrompt = knowledgeContext
@@ -452,7 +539,7 @@ async function processWebhookMessage(body: any) {
   // Matching por palabras clave entre el texto del anuncio y los nombres del inventario.
   // Normaliza, extrae palabras significativas (>2 chars) y elige el producto con
   // mayor porcentaje de palabras del nombre que aparecen en el texto del anuncio.
-  function matchAdProduct(adText: string, products: typeof inventoryProducts) {
+  function matchAdProduct(adText: string, products: UnifiedProduct[]) {
     const normalize = (s: string) =>
       s.toLowerCase()
        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")  // quitar tildes
@@ -485,7 +572,7 @@ async function processWebhookMessage(body: any) {
     return bestScore >= 0.5 ? bestProduct : null
   }
 
-  const adProduct = adHeadline ? matchAdProduct(adHeadline, inventoryProducts) : null
+  const adProduct = adHeadline ? matchAdProduct(adHeadline, allProducts) : null
 
   const adProductInfo = adProduct
     ? `Detalles del producto: ${adProduct.name}${adProduct.description ? ` — ${adProduct.description}` : ""}${adProduct.price != null ? ` — Precio: ${adProduct.currency} ${adProduct.price}` : ""}${adProduct.image_url ? " [tiene foto disponible]" : ""}.`

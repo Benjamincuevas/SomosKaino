@@ -5,9 +5,18 @@ function buildJsonUrl(sheetId: string, sheetGid: string) {
   return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&gid=${sheetGid}`
 }
 
+export type SheetProduct = {
+  name:        string
+  description: string | null
+  price:       number | null
+  currency:    string | null
+  image_url:   string | null
+}
+
 export type SheetData = {
   text:     string                    // contexto para la IA (sin URLs reales)
   imageMap: Record<string, string>    // nombre_producto_lowercase → URL de imagen
+  products: SheetProduct[]            // productos estructurados (para matching)
 }
 
 // Cache en memoria por tenant — se renueva cada 5 minutos
@@ -40,12 +49,24 @@ function normalizeName(s: string): string {
   return s.toLowerCase().replace(/[-_]/g, " ").replace(/\s+/g, " ").trim()
 }
 
+// Extrae un número y una moneda opcional de un valor de celda como "RD$ 8,500" o "$1,200"
+function parsePriceCell(cell: string): { price: number | null; currency: string | null } {
+  if (!cell) return { price: null, currency: null }
+  const currencyMatch = cell.match(/[A-Z]{2,4}\$|US\$|\$/i)
+  const numStr = cell.replace(/[^\d.,]/g, "").replace(/,/g, "")
+  const num = numStr ? parseFloat(numStr) : NaN
+  return {
+    price:    isNaN(num) ? null : num,
+    currency: currencyMatch?.[0]?.replace(/\$$/, "").toUpperCase() || (currencyMatch ? "$" : null),
+  }
+}
+
 function parseGvizJson(raw: string): SheetData {
   // El gviz JSON viene envuelto en: google.visualization.Query.setResponse({...});
   const match = raw.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\)/)
   if (!match) {
     console.error("❌ No se pudo extraer JSON del gviz response")
-    return { text: "", imageMap: {} }
+    return { text: "", imageMap: {}, products: [] }
   }
 
   let table: { cols: { label: string }[]; rows: { c: ({ v: string | null } | null)[] }[] }
@@ -54,18 +75,22 @@ function parseGvizJson(raw: string): SheetData {
     table = parsed.table
   } catch {
     console.error("❌ Error parseando JSON del sheet")
-    return { text: "", imageMap: {} }
+    return { text: "", imageMap: {}, products: [] }
   }
 
   const cols = table.cols.map(c => c.label?.toLowerCase().trim() ?? "")
 
-  // Encontrar columnas de nombre e imagen
-  const nameIdx  = cols.findIndex(h => h.includes("nombre") || h.includes("name") || h.includes("producto") || h.includes("modelo"))
-  const imageIdx = cols.findIndex(h => h.includes("imagen") || h.includes("image") || h.includes("foto") || h.includes("url"))
+  // Encontrar columnas
+  const nameIdx     = cols.findIndex(h => h.includes("nombre") || h.includes("name") || h.includes("producto") || h.includes("modelo"))
+  const imageIdx    = cols.findIndex(h => h.includes("imagen") || h.includes("image") || h.includes("foto") || (h.includes("url") && !h.includes("nombre")))
+  const priceIdx    = cols.findIndex(h => h.includes("precio") || h.includes("price") || h.includes("costo") || h.includes("valor"))
+  const currencyIdx = cols.findIndex(h => h.includes("moneda") || h.includes("currency") || h.includes("divisa"))
+  const descIdx     = cols.findIndex(h => h.includes("descripc") || h.includes("description") || h.includes("detalle") || h.includes("especif"))
 
-  console.log(`📋 Columnas (${cols.length}): nameIdx=${nameIdx} ("${cols[nameIdx]}"), imageIdx=${imageIdx} ("${cols[imageIdx]}")`)
+  console.log(`📋 Columnas (${cols.length}): name=${nameIdx}, image=${imageIdx}, price=${priceIdx}, currency=${currencyIdx}, desc=${descIdx}`)
 
   const imageMap: Record<string, string> = {}
+  const products: SheetProduct[] = []
   const textLines: string[] = []
 
   // Cabecera para la IA
@@ -83,6 +108,20 @@ function parseGvizJson(raw: string): SheetData {
       imageMap[productName.toLowerCase()] = normalizeImageUrl(rawUrl)
     }
 
+    if (productName) {
+      const priceCell = priceIdx >= 0 ? getValue(priceIdx) : ""
+      const parsed    = parsePriceCell(priceCell)
+      const currency  = currencyIdx >= 0 ? getValue(currencyIdx) || null : parsed.currency
+      const desc      = descIdx >= 0 ? getValue(descIdx) || null : null
+      products.push({
+        name:        productName,
+        description: desc,
+        price:       parsed.price,
+        currency,
+        image_url:   rawUrl ? normalizeImageUrl(rawUrl) : null,
+      })
+    }
+
     // Texto para la IA
     const displayRow = cols.map((_, i) => {
       if (i === imageIdx) return rawUrl ? "disponible" : ""
@@ -91,11 +130,11 @@ function parseGvizJson(raw: string): SheetData {
     textLines.push(displayRow.join(" | "))
   }
 
-  return { text: textLines.join("\n"), imageMap }
+  return { text: textLines.join("\n"), imageMap, products }
 }
 
 export async function getPropertyData(sheetId?: string | null, sheetGid?: string | null): Promise<SheetData> {
-  if (!sheetId || !sheetGid) return { text: "", imageMap: {} }
+  if (!sheetId || !sheetGid) return { text: "", imageMap: {}, products: [] }
   const id  = sheetId
   const gid = sheetGid
   const cacheKey = `${id}:${gid}`
@@ -103,7 +142,7 @@ export async function getPropertyData(sheetId?: string | null, sheetGid?: string
 
   const cached = cacheMap.get(cacheKey)
   if (cached && now - cached.fetchedAt < CACHE_TTL_MS) {
-    return { text: cached.text, imageMap: cached.imageMap }
+    return { text: cached.text, imageMap: cached.imageMap, products: cached.products }
   }
 
   const jsonUrl = buildJsonUrl(id, gid)
@@ -112,17 +151,17 @@ export async function getPropertyData(sheetId?: string | null, sheetGid?: string
     const res = await fetch(jsonUrl, { cache: "no-store" })
     if (!res.ok) {
       console.error(`❌ No se pudo obtener el sheet: ${res.status}`)
-      return cached ?? { text: "", imageMap: {} }
+      return cached ?? { text: "", imageMap: {}, products: [] }
     }
 
     const raw  = await res.text()
     const data = parseGvizJson(raw)
     cacheMap.set(cacheKey, { ...data, fetchedAt: now })
-    console.log(`✅ Sheet actualizado (${id}) — ${Object.keys(data.imageMap).length} productos con imagen:`, Object.keys(data.imageMap))
+    console.log(`✅ Sheet actualizado (${id}) — ${data.products.length} productos, ${Object.keys(data.imageMap).length} con imagen`)
     return data
   } catch (err) {
     console.error("❌ Error al obtener el sheet:", err)
-    return cached ?? { text: "", imageMap: {} }
+    return cached ?? { text: "", imageMap: {}, products: [] }
   }
 }
 
