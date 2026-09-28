@@ -1,6 +1,7 @@
 "use server"
 
 import { redirect } from "next/navigation"
+import { headers } from "next/headers"
 import { createClient } from "@/lib/supabase/server"
 import { CITIES } from "@/lib/catalog"
 
@@ -12,6 +13,15 @@ function fail(path: string, message: string, extra = ""): never {
 function safeNext(value: FormDataEntryValue | null) {
   const next = String(value ?? "")
   return next.startsWith("/") && !next.startsWith("//") ? next : "/panel"
+}
+
+// URL pública de la web: la variable si existe, si no el dominio de la petición
+function siteUrl() {
+  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "")
+  const h = headers()
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "www.somoskaino.org"
+  const proto = h.get("x-forwarded-proto") ?? "https"
+  return `${proto}://${host}`
 }
 
 export async function signIn(formData: FormData) {
@@ -44,7 +54,11 @@ export async function signUp(formData: FormData) {
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { role, full_name: fullName, phone, city } },
+    options: {
+      data: { role, full_name: fullName, phone, city },
+      // El enlace del correo vuelve a nuestra web (no a localhost) y deja la sesión iniciada
+      emailRedirectTo: `${siteUrl()}/auth/callback?next=${role === "profesional" ? "/perfil?bienvenida=1" : "/panel"}`,
+    },
   })
   if (error) fail("/registro", error.message, back)
 
