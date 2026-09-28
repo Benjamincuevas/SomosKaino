@@ -1,11 +1,12 @@
-// middleware.ts — se ejecuta ANTES de renderizar cualquier página
-// Su trabajo: revisar si hay sesión activa y redirigir si no
+// Refresca la sesión de Supabase y protege las rutas privadas
 
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
+const PRIVATE_PREFIXES = ["/panel", "/solicitar", "/solicitudes", "/perfil"]
+
 export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request })
+  let response = NextResponse.next({ request })
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -16,49 +17,34 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet: { name: string; value: string; options?: object }[]) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          )
-          supabaseResponse = NextResponse.next({ request })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          )
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          response = NextResponse.next({ request })
+          cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options))
         },
       },
     }
   )
 
-  // Leer sesión del cookie sin llamada de red (evita timeout en Edge)
-  const { data: { session } } = await supabase.auth.getSession()
-  const user = session?.user ?? null
-
+  const { data: { user } } = await supabase.auth.getUser()
   const path = request.nextUrl.pathname
 
-  // Si intenta entrar al dashboard sin sesión → redirigir a /login
-  const publicPaths = ["/login", "/register", "/api"]
-  const isPublic = publicPaths.some(p => path.startsWith(p)) || path === "/"
-  const isProtected = !isPublic
-
-  if (isProtected && !user) {
+  if (!user && PRIVATE_PREFIXES.some(p => path.startsWith(p))) {
     const url = request.nextUrl.clone()
     url.pathname = "/login"
+    url.search = `?next=${encodeURIComponent(path)}`
     return NextResponse.redirect(url)
   }
 
-  // Si ya tiene sesión e intenta ir a /login o /register → al dashboard
-  if ((path === "/login" || path === "/register") && session) {
+  if (user && (path === "/login" || path === "/registro")) {
     const url = request.nextUrl.clone()
-    url.pathname = "/dashboard"
+    url.pathname = "/panel"
+    url.search = ""
     return NextResponse.redirect(url)
   }
 
-  return supabaseResponse
+  return response
 }
 
-// Este matcher define en qué rutas se ejecuta el middleware
-// Excluimos archivos estáticos y assets
 export const config = {
-  matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
-  ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
 }

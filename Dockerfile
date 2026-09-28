@@ -20,13 +20,6 @@ RUN npm run build
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-# Variables necesarias en tiempo de ejecución (servidor)
-ARG SUPABASE_SERVICE_ROLE_KEY
-ARG GEMINI_API_KEY
-ARG WHATSAPP_VERIFY_TOKEN
-ENV SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY
-ENV GEMINI_API_KEY=$GEMINI_API_KEY
-ENV WHATSAPP_VERIFY_TOKEN=$WHATSAPP_VERIFY_TOKEN
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static

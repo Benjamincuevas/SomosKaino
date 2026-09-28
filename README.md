@@ -1,172 +1,69 @@
-# 🤖 SomosKaino
+# ServiNet
 
-**CRM con IA para WhatsApp** — Automatiza conversaciones, califica leads y agenda citas 24/7.
+**Pide cualquier servicio para tu hogar o negocio en República Dominicana.**
+Plomeros, electricistas, albañiles, herreros, maestros constructores, ingenieros y más.
+Publicas lo que necesitas, recibes cotizaciones de profesionales de tu zona y eliges.
 
-[![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org/)
-[![Supabase](https://img.shields.io/badge/Supabase-Database-3FCF8E?logo=supabase)](https://supabase.com/)
-[![WhatsApp](https://img.shields.io/badge/WhatsApp-API%20Oficial-25D366?logo=whatsapp)](https://business.whatsapp.com/)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+📄 Plan de negocio completo (pros y contras, mercado, competencia, modelo de negocio y roadmap): [`docs/PLAN.md`](docs/PLAN.md)
 
----
+> El CRM con IA para WhatsApp que vivía antes en este repositorio se conserva en la rama `main`
+> (commit `d2228c3`) y se moverá a su propio repositorio, `SomosKaino-CRM`.
 
-## 📋 Descripción
+## Cómo funciona
 
-SomosKaino es un SaaS que permite a negocios automatizar sus ventas por WhatsApp usando inteligencia artificial. El agente de IA responde mensajes, califica prospectos y agenda citas automáticamente, permitiendo a los equipos comerciales enfocarse solo en cerrar ventas.
+1. **El cliente** publica una solicitud: servicio, descripción, ciudad, urgencia y presupuesto opcional.
+2. **Los profesionales** de ese oficio la ven en su panel y envían cotizaciones (precio, mensaje, fecha).
+3. **El cliente** compara (calificación, trabajos hechos, verificado) y acepta una.
+4. Se revelan los teléfonos y coordinan por **WhatsApp**.
+5. Al terminar, el cliente marca el trabajo como completado y deja una **reseña**.
 
-### ¿Para quién es?
-- 🏢 Agencias de marketing
-- 🏠 Inmobiliarias
-- 🏥 Clínicas y consultorios
-- 🚗 Concesionarios
-- 📚 Instituciones educativas
+## Stack
 
----
+- **Next.js 14** (App Router, Server Actions) + TypeScript + Tailwind CSS
+- **Supabase**: PostgreSQL, autenticación y seguridad por filas (RLS)
 
-## ✨ Características
+## Puesta en marcha
 
-- **💬 Inbox en tiempo real** — Todas las conversaciones de WhatsApp en un solo lugar
-- **🤖 Agente de IA 24/7** — Responde, califica y agenda automáticamente
-- **📊 CRM integrado** — Gestión de contactos, tags y estados
-- **📅 Calendario inteligente** — Agenda citas sin intervención humana
-- **📈 Embudos configurables** — Personaliza el flujo de ventas por etapas
-- **🔗 Webhooks y API** — Integra con tus herramientas existentes
-- **👥 Multi-tenant** — Cada cliente tiene su espacio aislado
+1. Crea un proyecto en [Supabase](https://supabase.com).
+2. En el **SQL Editor** de Supabase, ejecuta `supabase/migrations/001_servinet_schema.sql`.
+3. Copia `.env.example` a `.env.local` y rellena la URL y la *anon key* del proyecto
+   (Supabase → Project Settings → API).
+4. Instala y arranca:
 
----
-
-## 🛠️ Stack Tecnológico
-
-| Categoría | Tecnología |
-|-----------|------------|
-| **Frontend** | Next.js 14 (App Router), React, Tailwind CSS, shadcn/ui |
-| **Backend** | Next.js API Routes, Server Actions |
-| **Database** | Supabase (PostgreSQL) |
-| **Auth** | Supabase Auth |
-| **IA** | Google Gemini / OpenAI |
-| **Mensajería** | WhatsApp Business API (Meta Cloud API) |
-| **Pagos** | Stripe |
-| **Deploy** | Vercel |
-
----
-
-## 🚀 Instalación
-
-### Prerrequisitos
-
-- Node.js 18+
-- Cuenta en [Supabase](https://supabase.com)
-- API Key de [Google AI Studio](https://aistudio.google.com) o [OpenAI](https://platform.openai.com)
-- Meta Business Account para WhatsApp API
-
-### Configuración
-
-1. **Clona el repositorio**
-   ```bash
-   git clone https://github.com/Benjamincuevas/SomosKaino.git
-   cd SomosKaino
-   ```
-
-2. **Instala dependencias**
-   ```bash
-   npm install
-   ```
-
-3. **Configura variables de entorno**
-   ```bash
-   cp .env.example .env.local
-   ```
-   
-   Edita `.env.local` con tus credenciales:
-   ```env
-   # Supabase
-   NEXT_PUBLIC_SUPABASE_URL=tu-url
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=tu-anon-key
-   SUPABASE_SERVICE_ROLE_KEY=tu-service-key
-
-   # IA (elige uno)
-   GEMINI_API_KEY=tu-api-key
-   # OPENAI_API_KEY=tu-api-key
-
-   # WhatsApp
-   WHATSAPP_TOKEN=tu-token
-   WHATSAPP_PHONE_ID=tu-phone-id
-   WHATSAPP_VERIFY_TOKEN=tu-verify-token
-
-   # Stripe
-   STRIPE_SECRET_KEY=tu-secret-key
-   STRIPE_WEBHOOK_SECRET=tu-webhook-secret
-   ```
-
-4. **Inicia el servidor de desarrollo**
-   ```bash
-   npm run dev
-   ```
-
-5. Abre [http://localhost:3000](http://localhost:3000)
-
----
-
-## 📁 Estructura del Proyecto
-
-```
-SomosKaino/
-├── app/                    # App Router de Next.js
-│   ├── (auth)/            # Rutas de autenticación
-│   ├── (dashboard)/       # Panel principal
-│   ├── api/               # API Routes
-│   └── layout.tsx         # Layout principal
-├── components/            # Componentes React
-│   ├── ui/               # shadcn/ui components
-│   └── ...
-├── lib/                   # Utilidades y configuraciones
-│   ├── supabase/         # Cliente de Supabase
-│   ├── ai/               # Configuración de IA
-│   └── whatsapp/         # Helpers de WhatsApp API
-├── hooks/                 # Custom React hooks
-├── types/                 # TypeScript types
-└── public/               # Assets estáticos
+```bash
+npm install
+npm run dev
 ```
 
----
+Abre http://localhost:3000.
 
-## 🗺️ Roadmap
+> Para probar rápido, en Supabase → Authentication → Providers → Email puedes desactivar
+> "Confirm email" y así entrar justo después de registrarte.
 
-- [x] Estructura inicial del proyecto
-- [x] Sistema de autenticación (login, registro multi-tenant)
-- [x] Dashboard básico multi-tenant
-- [x] Integración WhatsApp API (webhook, templates, media)
-- [x] Inbox de conversaciones en tiempo real
-- [x] Agente de IA configurable por tenant
-- [x] Catálogo de productos y sincronización con WhatsApp
-- [x] Gestión de pedidos y contactos
-- [x] Base de conocimiento (documentos + catálogo)
-- [x] Control de inventario
-- [x] Reportes y analíticas básicas
-- [x] Landing page pública
-- [ ] Sistema de embudos (pipeline de ventas)
-- [ ] Calendario y agendamiento de citas
-- [ ] Integración con Stripe (pagos y suscripciones)
+## Estructura
 
----
+```
+app/
+  page.tsx                 Landing con categorías
+  (auth)/login, registro   Entrar y crear cuenta (cliente o profesional)
+  solicitar/               Formulario para pedir un servicio
+  panel/                   Panel: solicitudes del cliente / trabajos y cotizaciones del profesional
+  solicitudes/[id]/        Detalle: cotizar, aceptar, completar y reseñar
+  perfil/                  Perfil del profesional (oficios, ciudades, experiencia)
+  profesionales/[id]/      Perfil público con reseñas
+  actions.ts               Server actions
+lib/catalog.ts             Categorías, ciudades y utilidades (RD$, enlaces de WhatsApp)
+supabase/migrations/       Esquema, funciones y políticas de seguridad
+docs/PLAN.md               Plan de negocio y roadmap
+```
 
-## 🤝 Contribuir
+## Seguridad
 
-Las contribuciones son bienvenidas. Por favor, abre un issue primero para discutir los cambios que te gustaría hacer.
+Todas las reglas viven en la base de datos (RLS), no solo en la interfaz:
 
----
-
-## 📄 Licencia
-
-Este proyecto está bajo la Licencia MIT. Ver el archivo [LICENSE](LICENSE) para más detalles.
-
----
-
-## 📞 Contacto
-
-Desarrollado con ❤️ en República Dominicana
-
----
-
-<p align="center">
-  <b>SomosKaino</b> — Convierte conversaciones en clientes
-</p>
+- Un profesional solo ve solicitudes abiertas de sus oficios.
+- Solo el cliente dueño ve las cotizaciones de su solicitud; cada profesional ve solo la suya.
+- El teléfono solo lo ven las dos partes de un trabajo aceptado.
+- Nadie puede registrarse como admin, cambiar su rol ni marcarse como verificado.
+- Aceptar, completar y cancelar pasan por funciones que validan el estado.
+- Solo el cliente de un trabajo completado puede reseñar, y solo al profesional que lo hizo.

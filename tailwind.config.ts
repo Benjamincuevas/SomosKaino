@@ -1,23 +1,21 @@
 import type { Config } from "tailwindcss"
 
 const config: Config = {
-  // darkMode: le dice a Tailwind cómo activar el modo oscuro
-  darkMode: ["class"],
-  // content: escanea estos archivos para generar solo el CSS que usas
-  content: [
-    "./pages/**/*.{ts,tsx}",
-    "./components/**/*.{ts,tsx}",
-    "./app/**/*.{ts,tsx}",
-  ],
+  content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"],
   theme: {
     extend: {
-      // Aquí agregaremos colores y fuentes personalizadas de SomosKaino
       colors: {
         brand: {
-          50:  "#f0fdf4",
-          500: "#22c55e",
-          600: "#16a34a",
-          900: "#14532d",
+          50: "#eff6ff",
+          100: "#dbeafe",
+          500: "#2563eb",
+          600: "#1d4ed8",
+          700: "#1e40af",
+          900: "#172554",
+        },
+        accent: {
+          500: "#f59e0b",
+          600: "#d97706",
         },
       },
     },

@@ -1,29 +1,22 @@
-// layout.tsx raíz: envuelve TODAS las páginas de la app
-// Es como el "marco" que nunca cambia (fuentes, metadata, providers)
-
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
 import "./globals.css"
+import Header from "@/components/Header"
 
-// Inter: fuente de Google, se carga de forma optimizada con Next.js
-const inter = Inter({ subsets: ["latin"] })
-
-// Metadata: lo que ve Google y las redes sociales
 export const metadata: Metadata = {
-  title: "SomosKaino - CRM con IA para WhatsApp",
-  description: "Gestiona tus leads de bienes raíces con inteligencia artificial",
+  title: "ServiNet — Profesionales para tu hogar y negocio",
+  description:
+    "Pide plomeros, electricistas, albañiles, maestros constructores e ingenieros verificados en República Dominicana. Recibe cotizaciones y elige.",
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className="dark">
-      <body className={inter.className}>
-        {/* children = el contenido de cada página */}
-        {children}
+    <html lang="es">
+      <body className="min-h-screen bg-gray-50 text-gray-900 antialiased">
+        <Header />
+        <main>{children}</main>
+        <footer className="mt-16 border-t border-gray-200 py-8 text-center text-sm text-gray-500">
+          ServiNet · Hecho en República Dominicana
+        </footer>
       </body>
     </html>
   )
