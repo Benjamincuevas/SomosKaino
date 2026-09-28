@@ -20,6 +20,9 @@ export default async function Header() {
                   Pedir un servicio
                 </Link>
               )}
+              {profile.role === "admin" && (
+                <Link href="/admin" className="btn-outline">Admin</Link>
+              )}
               <Link href="/panel" className="btn-outline">Mi panel</Link>
               {profile.role === "profesional" && (
                 <Link href="/perfil" className="btn-outline hidden sm:inline-flex">Mi perfil</Link>

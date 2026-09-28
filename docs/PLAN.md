@@ -135,8 +135,9 @@ todavía se puede ganar con mejor ejecución.
 - Seguridad a nivel de base de datos (RLS): cada quien ve solo lo que le corresponde.
 
 ### Fase 2 — Confianza y WhatsApp
-- Fotos en la solicitud y en el perfil del profesional (portafolio).
-- Verificación de profesionales (subir cédula y certificado) y panel de administración para aprobarlos.
+- ✅ Fotos en la solicitud (hasta 5, privadas).
+- ✅ Verificación de profesionales (cédula + certificado de no antecedentes + referencias) y panel de administración para aprobarlos.
+- Portafolio de fotos en el perfil del profesional.
 - **Agente de IA por WhatsApp** (reutilizando SomosKaino): pedir servicios por chat/audio y avisar a técnicos.
 - Notificaciones por WhatsApp y correo cuando llega una cotización o te aceptan.
 

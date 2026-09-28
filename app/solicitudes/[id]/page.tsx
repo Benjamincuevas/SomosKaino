@@ -33,12 +33,19 @@ export default async function SolicitudPage({ params, searchParams }: {
 
   const { data: request } = await supabase
     .from("service_requests")
-    .select("id, client_id, category, title, description, city, sector, urgency, budget, status, accepted_quote_id, created_at")
+    .select("id, client_id, category, title, description, city, sector, urgency, budget, status, accepted_quote_id, photos, created_at")
     .eq("id", params.id)
     .maybeSingle()
   if (!request) notFound()
 
   const isOwner = request.client_id === profile.id
+
+  // Enlaces temporales a las fotos (el bucket es privado)
+  let photoUrls: string[] = []
+  if (request.photos?.length) {
+    const { data } = await supabase.storage.from("solicitudes").createSignedUrls(request.photos, 60 * 60)
+    photoUrls = (data ?? []).map(d => d.signedUrl).filter((u): u is string => Boolean(u))
+  }
   const { data: quotesData } = await supabase
     .from("quotes")
     .select("id, pro_id, price, message, available_date, status, created_at, professional_profiles!quotes_pro_id_fkey(verified, rating_avg, rating_count, jobs_done, profiles(full_name))")
@@ -79,6 +86,16 @@ export default async function SolicitudPage({ params, searchParams }: {
           {status && <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${status.className}`}>{status.label}</span>}
         </div>
         <p className="mt-4 whitespace-pre-line text-gray-700">{request.description}</p>
+        {photoUrls.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {photoUrls.map(url => (
+              <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="block h-28 w-28 overflow-hidden rounded-lg border border-gray-200">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt="Foto del trabajo" className="h-full w-full object-cover" />
+              </a>
+            ))}
+          </div>
+        )}
         <dl className="mt-4 grid gap-2 text-sm text-gray-600 sm:grid-cols-3">
           <div><dt className="text-xs text-gray-400">Lugar</dt><dd>{request.sector ? `${request.sector}, ` : ""}{request.city}</dd></div>
           <div><dt className="text-xs text-gray-400">Para cuándo</dt><dd>{URGENCY_LABELS[request.urgency]}</dd></div>
