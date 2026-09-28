@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server"
 import { CATEGORIES, CITIES } from "@/lib/catalog"
 import { updateProProfile } from "@/app/actions"
 import FormMessage from "@/components/FormMessage"
+import VerificationForm from "@/components/VerificationForm"
 
 export default async function PerfilPage({ searchParams }: { searchParams: { error?: string; ok?: string; bienvenida?: string } }) {
   const profile = await requireProfile()
@@ -16,6 +17,11 @@ export default async function PerfilPage({ searchParams }: { searchParams: { err
     .select("bio, categories, cities, years_experience, verified")
     .eq("id", profile.id)
     .single()
+  const { data: verification } = await supabase
+    .from("verifications")
+    .select("status, admin_note, submitted_at")
+    .eq("pro_id", profile.id)
+    .maybeSingle()
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-10">
@@ -27,11 +33,6 @@ export default async function PerfilPage({ searchParams }: { searchParams: { err
       {searchParams.bienvenida && (
         <p className="mt-4 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-900">
           ¡Bienvenido a ServiNet! Elige tus servicios y ciudades para empezar a ver trabajos.
-        </p>
-      )}
-      {!pro?.verified && (
-        <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          Tu perfil aún no está verificado. Los perfiles verificados reciben más trabajos: pronto podrás subir tu cédula y referencias.
         </p>
       )}
 
@@ -72,6 +73,30 @@ export default async function PerfilPage({ searchParams }: { searchParams: { err
           </div>
           <button className="btn-primary">Guardar perfil</button>
         </form>
+      </div>
+
+      <div className="card mt-6">
+        <h2 className="text-lg font-semibold">Verificación ✔</h2>
+        {pro?.verified ? (
+          <p className="mt-2 text-sm text-green-700">Tu perfil está verificado. Los clientes ven la insignia en tus cotizaciones.</p>
+        ) : verification?.status === "pendiente" ? (
+          <p className="mt-2 text-sm text-gray-600">
+            ⏳ Recibimos tus documentos el {new Date(verification.submitted_at).toLocaleDateString("es-DO", { timeZone: "America/Santo_Domingo" })}.
+            Te verificaremos pronto.
+          </p>
+        ) : (
+          <>
+            <p className="mt-1 text-sm text-gray-600">
+              Los profesionales verificados reciben más trabajos. Sube tus documentos y el equipo de ServiNet los revisará.
+            </p>
+            {verification?.status === "rechazada" && (
+              <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                Tu verificación anterior fue rechazada{verification.admin_note ? `: ${verification.admin_note}` : "."} Puedes volver a enviarla.
+              </p>
+            )}
+            <div className="mt-4"><VerificationForm userId={profile.id} /></div>
+          </>
+        )}
       </div>
     </div>
   )

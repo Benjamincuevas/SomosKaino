@@ -3,7 +3,7 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
-const PRIVATE_PREFIXES = ["/panel", "/solicitar", "/solicitudes", "/perfil"]
+const PRIVATE_PREFIXES = ["/panel", "/solicitar", "/solicitudes", "/perfil", "/admin"]
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request })

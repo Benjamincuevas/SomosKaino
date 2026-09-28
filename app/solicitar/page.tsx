@@ -3,6 +3,7 @@ import { requireProfile } from "@/lib/auth"
 import { CATEGORIES, CITIES, URGENCY_LABELS } from "@/lib/catalog"
 import { createRequest } from "@/app/actions"
 import FormMessage from "@/components/FormMessage"
+import PhotoUploader from "@/components/PhotoUploader"
 
 export default async function SolicitarPage({ searchParams }: { searchParams: { categoria?: string; error?: string } }) {
   const profile = await requireProfile()
@@ -57,6 +58,7 @@ export default async function SolicitarPage({ searchParams }: { searchParams: { 
               <input className="input" id="budget" name="budget" inputMode="numeric" placeholder="Ej.: 3,500" />
             </div>
           </div>
+          <PhotoUploader userId={profile.id} />
           <button className="btn-accent w-full py-3 text-base">Publicar y recibir cotizaciones</button>
         </form>
       </div>

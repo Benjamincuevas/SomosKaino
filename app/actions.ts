@@ -30,6 +30,7 @@ export async function createRequest(formData: FormData) {
   const sector = String(formData.get("sector") ?? "").trim() || null
   const urgency = String(formData.get("urgency") ?? "flexible")
   const budget = toInt(formData.get("budget"))
+  const photos = formData.getAll("photos").map(String)
   const back = `/solicitar?categoria=${encodeURIComponent(category)}`
 
   if (!CATEGORY_SLUGS.includes(category)) fail(back, "Elige el tipo de servicio")
@@ -37,11 +38,12 @@ export async function createRequest(formData: FormData) {
   if (description.length < 10) fail(back, "Describe un poco más el trabajo")
   if (!CITIES.includes(city)) fail(back, "Elige la ciudad")
   if (!["urgente", "esta_semana", "flexible"].includes(urgency)) fail(back, "Elige la urgencia")
+  if (photos.length > 5 || photos.some(p => !p.startsWith(`${profile.id}/`))) fail(back, "Fotos no válidas")
 
   const supabase = createClient()
   const { data, error } = await supabase
     .from("service_requests")
-    .insert({ client_id: profile.id, category, title, description, city, sector, urgency, budget })
+    .insert({ client_id: profile.id, category, title, description, city, sector, urgency, budget, photos })
     .select("id")
     .single()
   if (error || !data) fail(back, "No pudimos publicar tu solicitud. Intenta de nuevo.")
@@ -144,4 +146,40 @@ export async function updateProProfile(formData: FormData) {
 
   revalidatePath("/perfil")
   redirect(`/perfil?ok=${encodeURIComponent("Perfil guardado. Ya verás las solicitudes de tus servicios en tu panel.")}`)
+}
+
+// Se llama desde el formulario del navegador después de subir los documentos
+export async function submitVerification(cedulaPath: string, certificadoPath: string, references: string) {
+  const profile = await requireProfile()
+  if (profile.role !== "profesional") return { error: "Solo los profesionales pueden verificarse" }
+
+  const supabase = createClient()
+  const { error } = await supabase.rpc("submit_verification", {
+    p_cedula: cedulaPath,
+    p_certificado: certificadoPath,
+    p_references: references.slice(0, 1000),
+  })
+  if (error) return { error: error.message }
+
+  revalidatePath("/perfil")
+  return { error: null }
+}
+
+// ─── Administración ──────────────────────────────────────────────────────────
+
+export async function reviewVerification(formData: FormData) {
+  const profile = await requireProfile()
+  if (profile.role !== "admin") redirect("/panel")
+
+  const proId = String(formData.get("pro_id"))
+  const approve = formData.get("decision") === "aprobar"
+  const note = String(formData.get("note") ?? "").slice(0, 500)
+  if (!approve && note.trim().length < 3) fail("/admin", "Escribe el motivo del rechazo para que el profesional sepa qué corregir")
+
+  const supabase = createClient()
+  const { error } = await supabase.rpc("review_verification", { p_pro: proId, p_approve: approve, p_note: note })
+  if (error) fail("/admin", error.message)
+
+  revalidatePath("/admin")
+  redirect(`/admin?ok=${encodeURIComponent(approve ? "Profesional verificado" : "Verificación rechazada")}`)
 }
